@@ -18,5 +18,10 @@ public class NotificationRule : BaseAuditableEntity
     public RuleGroup? RuleFilter { get; set; }
     public List<NotificationScheduleWindow> ScheduleWindows { get; set; } = [];
     public int? CooldownSeconds { get; set; }
+    /// <summary>
+    /// When set, MediaAdded/MediaCreated matching this rule are held and grouped
+    /// (serie/season/album) before one webhook is sent per group.
+    /// </summary>
+    public int? BatchDebounceSeconds { get; set; }
     public DateTimeOffset? LastSentAt { get; set; }
 }

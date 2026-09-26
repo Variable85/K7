@@ -27,6 +27,7 @@ public class CreateNotificationRule : IEndpoint
                 RuleFilter = request.RuleFilter,
                 ScheduleWindows = request.ScheduleWindows,
                 CooldownSeconds = request.CooldownSeconds,
+                BatchDebounceSeconds = request.BatchDebounceSeconds,
                 IsEnabled = request.IsEnabled
             };
 

@@ -11,6 +11,13 @@ public partial class K7RuleEditor : ComponentBase
     [Parameter] public EventCallback<RuleGroupDto> ValueChanged { get; set; }
     [Parameter] public IReadOnlyList<RuleFieldDescriptorDto> FieldDescriptors { get; set; } = [];
     [Parameter] public Func<string, string, CancellationToken, Task<IReadOnlyList<string>>>? SearchSuggestionsAsync { get; set; }
+    [Parameter] public Func<string, string, CancellationToken, Task<IReadOnlyList<RuleFieldOptionDto>>>? SearchSuggestionOptionsAsync { get; set; }
+    [Parameter] public Func<string, string, CancellationToken, Task<string?>>? ResolveSearchDisplayAsync { get; set; }
+    /// <summary>
+    /// When true for a field, typed text searches only. The stored value updates on suggestion select.
+    /// Use for id fields that show name hints.
+    /// </summary>
+    [Parameter] public Func<string, bool>? CommitSearchOnSelectOnly { get; set; }
     [Parameter] public string Class { get; set; } = "";
     /// <summary>Shown when the root group has no conditions yet.</summary>
     [Parameter] public string? EmptyHint { get; set; }
@@ -53,6 +60,27 @@ public partial class K7RuleEditor : ComponentBase
             return L["ValuePlaceholderDays"];
 
         return descriptor?.ValuePlaceholder ?? L["ValuePlaceholderDefault"];
+    }
+
+    private async Task<IReadOnlyList<RuleFieldOptionDto>> SearchForFieldOptionsAsync(
+        string field,
+        string text,
+        CancellationToken cancellationToken)
+    {
+        if (SearchSuggestionOptionsAsync is not null)
+        {
+            var options = await SearchSuggestionOptionsAsync(field, text, cancellationToken);
+            if (options.Count > 0 || CommitSearchOnSelectOnly?.Invoke(field) == true)
+                return options;
+        }
+
+        if (SearchSuggestionsAsync is null)
+            return [];
+
+        var strings = await SearchSuggestionsAsync(field, text, cancellationToken);
+        return strings
+            .Select(s => new RuleFieldOptionDto { Value = s, Label = s })
+            .ToList();
     }
 
     private void OnMatchConditionChanged(EditGroup group, RuleMatchCondition value)

@@ -73,7 +73,14 @@
   <data name="ParamSessionPosition" xml:space="preserve"><value>Position</value></data>
   <data name="ParamSessionDuration" xml:space="preserve"><value>Duree</value></data>
   <data name="ParamSessionProgressPercent" xml:space="preserve"><value>Progression</value></data>
-  <data name="ParamLibraryTitle" xml:space="preserve"><value>Bibliotheque</value></data>
+  <data name="ParamLibraryTitle" xml:space="preserve"><value>Titre bibliotheque</value></data>
+  <data name="ParamLibraryId" xml:space="preserve"><value>Bibliotheque</value></data>
+  <data name="ParamLibraryGroupTitle" xml:space="preserve"><value>Titre groupe</value></data>
+  <data name="ParamLibraryGroupId" xml:space="preserve"><value>Groupe de bibliotheques</value></data>
+  <data name="ParamMediaOverview" xml:space="preserve"><value>Synopsis</value></data>
+  <data name="ParamMediaRuntime" xml:space="preserve"><value>Duree (min)</value></data>
+  <data name="ParamBatchCount" xml:space="preserve"><value>Nombre dans le lot</value></data>
+  <data name="ParamBatchKind" xml:space="preserve"><value>Type de lot</value></data>
   <data name="ParamLibraryMediaType" xml:space="preserve"><value>Type de bibliotheque</value></data>
   <data name="ParamDeviceName" xml:space="preserve"><value>Nom de l'appareil</value></data>
   <data name="ParamDeviceType" xml:space="preserve"><value>Type d'appareil</value></data>

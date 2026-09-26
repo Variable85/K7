@@ -37,6 +37,7 @@ public partial class EditNotificationRuleDialog
     private bool _isEditMode;
     private bool _isPreviewMode;
     private int? _cooldownSeconds;
+    private int? _batchDebounceSeconds;
     private string _selectedPresetId = "";
     private List<NotificationWebhookPresetDto> _presets = [];
     private readonly List<ScheduleWindowEdit> _scheduleWindows = [];
@@ -101,6 +102,21 @@ public partial class EditNotificationRuleDialog
 
     private bool HasPreset => !string.IsNullOrWhiteSpace(_selectedPresetId);
 
+    /// <summary>
+    /// Media ready (MediaAdded) / Media created only.
+    /// </summary>
+    private static readonly HashSet<string> BatchableEventNames = new(StringComparer.Ordinal)
+    {
+        "MediaAddedEvent",
+        "MediaCreatedEvent"
+    };
+
+    private bool SupportsMediaBatching =>
+        _selectedEventNames.Any(BatchableEventNames.Contains);
+
+    private int? EffectiveBatchDebounceSeconds =>
+        SupportsMediaBatching ? _batchDebounceSeconds : null;
+
     private string? WebhookUrlHelperText
     {
         get
@@ -144,10 +160,14 @@ public partial class EditNotificationRuleDialog
             _rawJsonTemplate = ExistingRule.RawJsonTemplate ?? "";
             _ruleFilter = ExistingRule.RuleFilter;
             _cooldownSeconds = ExistingRule.CooldownSeconds;
+            _batchDebounceSeconds = ExistingRule.BatchDebounceSeconds;
 
             _selectedEventNames.Clear();
             foreach (var evt in ExistingRule.EventTypeNames)
                 _selectedEventNames.Add(evt);
+
+            if (!SupportsMediaBatching)
+                _batchDebounceSeconds = null;
 
             ParseProviderConfig(ExistingRule.ProviderConfig);
             LoadScheduleWindows(ExistingRule.ScheduleWindows);
@@ -277,6 +297,7 @@ public partial class EditNotificationRuleDialog
         {
             _selectedCategory = category;
             _selectedEventNames.Clear();
+            _batchDebounceSeconds = null;
         }
     }
 
@@ -382,6 +403,9 @@ public partial class EditNotificationRuleDialog
             _selectedEventNames.Add(eventTypeName);
         else
             _selectedEventNames.Remove(eventTypeName);
+
+        if (!SupportsMediaBatching)
+            _batchDebounceSeconds = null;
     }
 
     private void ApplyDefaultTemplates()
@@ -591,6 +615,10 @@ public partial class EditNotificationRuleDialog
                 Label = LocalizeOption(o.Label)
             }).ToList();
 
+            var operators = IsIdSearchField(p.Name)
+                ? new[] { RuleOperator.Equals, RuleOperator.NotEquals }
+                : OperatorsFor(valueType);
+
             return new RuleFieldDescriptorDto
             {
                 FieldName = p.Name,
@@ -598,7 +626,7 @@ public partial class EditNotificationRuleDialog
                 ValueType = valueType,
                 Group = LocalizeGroup(p.Group),
                 Options = options,
-                Operators = OperatorsFor(valueType)
+                Operators = operators
             };
         }).ToList();
     }
@@ -646,7 +674,10 @@ public partial class EditNotificationRuleDialog
         ]
     };
 
-    private async Task<IReadOnlyList<string>> SearchConditionSuggestionsAsync(
+    private static bool IsIdSearchField(string field) =>
+        field is "Library.Id" or "LibraryGroup.Id";
+
+    private async Task<IReadOnlyList<RuleFieldOptionDto>> SearchConditionSuggestionOptionsAsync(
         string field,
         string text,
         CancellationToken cancellationToken)
@@ -658,20 +689,62 @@ public partial class EditNotificationRuleDialog
                 .Select(u => u.DisplayName ?? u.UserName ?? "")
                 .Where(n => n.Contains(text, StringComparison.OrdinalIgnoreCase))
                 .Take(20)
+                .Select(n => new RuleFieldOptionDto { Value = n, Label = n })
                 .ToList();
         }
 
-        if (field is "Library.Title" or "LibraryTitle")
+        if (field is "Library.Id")
         {
             var libraries = await LibraryService.GetLibrariesAsync(cancellationToken);
             return libraries
-                .Select(l => l.Title)
-                .Where(n => n.Contains(text, StringComparison.OrdinalIgnoreCase))
+                .Where(l => l.Title.Contains(text, StringComparison.OrdinalIgnoreCase))
                 .Take(20)
+                .Select(l => new RuleFieldOptionDto
+                {
+                    Value = l.Id.ToString(),
+                    Label = l.Title
+                })
+                .ToList();
+        }
+
+        if (field is "LibraryGroup.Id")
+        {
+            var groups = await LibraryService.GetLibraryGroupsAsync(cancellationToken);
+            return groups
+                .Where(g => g.Title.Contains(text, StringComparison.OrdinalIgnoreCase))
+                .Take(20)
+                .Select(g => new RuleFieldOptionDto
+                {
+                    Value = g.Id.ToString(),
+                    Label = g.Title
+                })
                 .ToList();
         }
 
         return [];
+    }
+
+    private async Task<string?> ResolveConditionSearchDisplayAsync(
+        string field,
+        string value,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        if (field is "Library.Id" && Guid.TryParse(value, out var libraryId))
+        {
+            var libraries = await LibraryService.GetLibrariesAsync(cancellationToken);
+            return libraries.FirstOrDefault(l => l.Id == libraryId)?.Title;
+        }
+
+        if (field is "LibraryGroup.Id" && Guid.TryParse(value, out var groupId))
+        {
+            var groups = await LibraryService.GetLibraryGroupsAsync(cancellationToken);
+            return groups.FirstOrDefault(g => g.Id == groupId)?.Title;
+        }
+
+        return null;
     }
 
     private void LoadScheduleWindows(IReadOnlyList<NotificationScheduleWindowDto> windows)
@@ -788,6 +861,7 @@ public partial class EditNotificationRuleDialog
                     RuleFilter = _ruleFilter,
                     ScheduleWindows = windows,
                     CooldownSeconds = _cooldownSeconds,
+                    BatchDebounceSeconds = EffectiveBatchDebounceSeconds,
                     IsEnabled = ExistingRule.IsEnabled
                 });
             }
@@ -805,7 +879,8 @@ public partial class EditNotificationRuleDialog
                     RawJsonTemplate = string.IsNullOrWhiteSpace(_rawJsonTemplate) ? null : _rawJsonTemplate,
                     RuleFilter = _ruleFilter,
                     ScheduleWindows = windows,
-                    CooldownSeconds = _cooldownSeconds
+                    CooldownSeconds = _cooldownSeconds,
+                    BatchDebounceSeconds = EffectiveBatchDebounceSeconds
                 });
             }
 

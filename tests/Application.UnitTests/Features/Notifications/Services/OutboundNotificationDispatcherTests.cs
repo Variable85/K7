@@ -136,6 +136,7 @@ public class OutboundNotificationDispatcherTests
             new NotificationConditionEvaluator(),
             new NotificationPayloadRenderer(),
             new NotificationEventEnricher(context, server),
+            new OutboundNotificationBatcher(Substitute.For<IServiceScopeFactory>(), NullLogger<OutboundNotificationBatcher>.Instance),
             NullLogger<OutboundNotificationDispatcher>.Instance);
 
         return (dispatcher, context);

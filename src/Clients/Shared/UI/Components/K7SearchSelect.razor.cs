@@ -1,3 +1,4 @@
+using K7.Shared.Dtos.Rules;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
@@ -19,6 +20,12 @@ public partial class K7SearchSelect : ComponentBase, IAsyncDisposable
     [Parameter] public bool CommitOnSelectOnly { get; set; }
     [Parameter] public EventCallback<string?> OnDebouncedCommit { get; set; }
     [Parameter] public Func<string, CancellationToken, Task<IReadOnlyList<string>>>? SearchAsync { get; set; }
+    /// <summary>
+    /// When set, suggestions show <see cref="RuleFieldOptionDto.Label"/> and commit
+    /// <see cref="RuleFieldOptionDto.Value"/> (e.g. library name hint, stored id).
+    /// </summary>
+    [Parameter] public Func<string, CancellationToken, Task<IReadOnlyList<RuleFieldOptionDto>>>? SearchOptionsAsync { get; set; }
+    [Parameter] public Func<string, CancellationToken, Task<string?>>? ResolveDisplayAsync { get; set; }
 
     private bool _open;
     private bool _loading;
@@ -29,16 +36,76 @@ public partial class K7SearchSelect : ComponentBase, IAsyncDisposable
     private bool _positionDropdown;
     private bool _editingListenerBound;
     private int _highlightedIndex = -1;
-    private IReadOnlyList<string> _suggestions = [];
+    private IReadOnlyList<RuleFieldOptionDto> _suggestions = [];
     private CancellationTokenSource? _searchCts;
     private ElementReference _root;
     private ElementReference _dropdown;
     private DotNetObjectReference<K7SearchSelect>? _dotNetRef;
+    private string _displayText = "";
+    private string? _resolvedForValue;
+    private CancellationTokenSource? _resolveCts;
+
+    private bool UsesLabeledValues => SearchOptionsAsync is not null || ResolveDisplayAsync is not null;
+
+    private string InputText => UsesLabeledValues ? _displayText : (Value ?? "");
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!UsesLabeledValues)
+            return;
+
+        if (string.Equals(Value, _resolvedForValue, StringComparison.Ordinal))
+            return;
+
+        if (_editing)
+            return;
+
+        _resolvedForValue = Value;
+        if (string.IsNullOrWhiteSpace(Value))
+        {
+            _displayText = "";
+            return;
+        }
+
+        if (ResolveDisplayAsync is null)
+        {
+            _displayText = Value;
+            return;
+        }
+
+        _resolveCts?.Cancel();
+        _resolveCts?.Dispose();
+        _resolveCts = new CancellationTokenSource();
+        var token = _resolveCts.Token;
+        try
+        {
+            var label = await ResolveDisplayAsync(Value, token);
+            if (_disposed || token.IsCancellationRequested)
+                return;
+
+            _displayText = string.IsNullOrWhiteSpace(label) ? Value : label;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
 
     private async Task OnInputChanged(string? value)
     {
         if (!_editing)
             return;
+
+        if (UsesLabeledValues)
+        {
+            _displayText = value ?? "";
+            if (!CommitOnSelectOnly)
+            {
+                Value = value;
+                await ValueChanged.InvokeAsync(value);
+            }
+
+            return;
+        }
 
         Value = value;
         if (!CommitOnSelectOnly)
@@ -50,11 +117,17 @@ public partial class K7SearchSelect : ComponentBase, IAsyncDisposable
         if (_disposed || !_editing)
             return;
 
-        Value = value;
-        await ValueChanged.InvokeAsync(value);
+        if (UsesLabeledValues)
+            _displayText = value ?? "";
+        else
+            Value = value;
+
+        if (!CommitOnSelectOnly)
+            await ValueChanged.InvokeAsync(value);
+
         _highlightedIndex = -1;
 
-        if (SearchAsync is null)
+        if (SearchOptionsAsync is null && SearchAsync is null)
         {
             _suggestions = [];
             _open = false;
@@ -89,7 +162,7 @@ public partial class K7SearchSelect : ComponentBase, IAsyncDisposable
 
         try
         {
-            _suggestions = await SearchAsync(trimmed, token);
+            _suggestions = await LoadSuggestionsAsync(trimmed, token);
             if (_disposed || token.IsCancellationRequested)
                 return;
 
@@ -118,7 +191,23 @@ public partial class K7SearchSelect : ComponentBase, IAsyncDisposable
         }
     }
 
-    private async Task SelectSuggestionAsync(string suggestion)
+    private async Task<IReadOnlyList<RuleFieldOptionDto>> LoadSuggestionsAsync(
+        string text,
+        CancellationToken cancellationToken)
+    {
+        if (SearchOptionsAsync is not null)
+            return await SearchOptionsAsync(text, cancellationToken);
+
+        if (SearchAsync is null)
+            return [];
+
+        var strings = await SearchAsync(text, cancellationToken);
+        return strings
+            .Select(s => new RuleFieldOptionDto { Value = s, Label = s })
+            .ToList();
+    }
+
+    private async Task SelectSuggestionAsync(RuleFieldOptionDto suggestion)
     {
         if (_disposed)
             return;
@@ -127,17 +216,19 @@ public partial class K7SearchSelect : ComponentBase, IAsyncDisposable
         _searchCts?.Cancel();
         _loading = false;
 
-        Value = suggestion;
-        await ValueChanged.InvokeAsync(suggestion);
+        Value = suggestion.Value;
+        _displayText = suggestion.Label;
+        _resolvedForValue = suggestion.Value;
+        await ValueChanged.InvokeAsync(suggestion.Value);
 
         // Close the dropdown before the (often slow) parent filter refresh so Enter/click feel instant.
         await EndEditingAsync();
 
         if (OnDebouncedCommit.HasDelegate)
-            await OnDebouncedCommit.InvokeAsync(suggestion);
+            await OnDebouncedCommit.InvokeAsync(suggestion.Value);
     }
 
-    private async Task OnSuggestionKeyDown(KeyboardEventArgs e, string suggestion)
+    private async Task OnSuggestionKeyDown(KeyboardEventArgs e, RuleFieldOptionDto suggestion)
     {
         if (e.Key is "Enter" or " ")
             await SelectSuggestionAsync(suggestion);
@@ -231,7 +322,7 @@ public partial class K7SearchSelect : ComponentBase, IAsyncDisposable
         if (!_disposed)
             StateHasChanged();
 
-        await OnDebouncedSearch(Value);
+        await OnDebouncedSearch(InputText);
     }
 
     private async Task ExitSpatialEditAsync()
@@ -377,5 +468,7 @@ public partial class K7SearchSelect : ComponentBase, IAsyncDisposable
         }
 
         _dotNetRef?.Dispose();
+        _resolveCts?.Cancel();
+        _resolveCts?.Dispose();
     }
 }

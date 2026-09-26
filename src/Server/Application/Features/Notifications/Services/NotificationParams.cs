@@ -96,6 +96,15 @@ public static class NotificationParams
             .Select(v => new RuleFieldOptionDto { Value = v.ToString(), Label = v.ToString() })
             .ToList();
 
+    public static readonly IReadOnlyList<RuleFieldOptionDto> BatchKindOptions =
+    [
+        new() { Value = "Episode", Label = "Episode" },
+        new() { Value = "Season", Label = "Season" },
+        new() { Value = "Serie", Label = "Serie" },
+        new() { Value = "Album", Label = "Album" },
+        new() { Value = "Artist", Label = "Artist" }
+    ];
+
     private static readonly IReadOnlyList<RuleFieldOptionDto> BooleanOptions =
     [
         new() { Value = "true", Label = "true" },
@@ -325,7 +334,7 @@ public static class NotificationParams
         Number("Duration", NotificationParameterGroup.Session, "5400", "Float");
 
     public static readonly NotificationParameterInfo LibraryTitle =
-        Search("Library.Title", NotificationParameterGroup.Library, "Films");
+        Text("Library.Title", NotificationParameterGroup.Library, "Films");
 
     public static readonly NotificationParameterInfo LibraryMediaType =
         Select("Library.MediaType", NotificationParameterGroup.Library, "Movie", MediaTypeOptions);
@@ -340,7 +349,25 @@ public static class NotificationParams
         Language("Library.MetadataLanguage", NotificationParameterGroup.Library, "fr");
 
     public static readonly NotificationParameterInfo LibraryId =
-        Text("Library.Id", NotificationParameterGroup.Library, "a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+        Search("Library.Id", NotificationParameterGroup.Library, "a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+
+    public static readonly NotificationParameterInfo LibraryGroupId =
+        Search("LibraryGroup.Id", NotificationParameterGroup.Library, "b2c3d4e5-f6a7-8901-bcde-f12345678901");
+
+    public static readonly NotificationParameterInfo LibraryGroupTitle =
+        Text("LibraryGroup.Title", NotificationParameterGroup.Library, "Anime");
+
+    public static readonly NotificationParameterInfo MediaOverview =
+        Text("Media.Overview", NotificationParameterGroup.Media, "A team travels through a wormhole in search of a new home.");
+
+    public static readonly NotificationParameterInfo MediaRuntime =
+        Number("Media.Runtime", NotificationParameterGroup.Media, "42");
+
+    public static readonly NotificationParameterInfo BatchCount =
+        Number("Batch.Count", NotificationParameterGroup.Media, "3");
+
+    public static readonly NotificationParameterInfo BatchKind =
+        Select("Batch.Kind", NotificationParameterGroup.Media, "Season", BatchKindOptions);
 
     public static readonly NotificationParameterInfo AddedCount =
         Number("AddedCount", NotificationParameterGroup.Library, "12");
@@ -532,8 +559,18 @@ public static class NotificationParams
     public static readonly IReadOnlyList<NotificationParameterInfo> MediaCore =
     [
         MediaTitle, MediaOriginalTitle, MediaType, MediaReleaseDate, MediaYear,
-        MediaGenres, MediaGenresCount, PictureUrl, BackdropUrl, MediaUrl,
-        ExternalTmdb, ExternalImdb, ExternalTvdb
+        MediaOverview, MediaRuntime, MediaGenres, MediaGenresCount, PictureUrl, BackdropUrl, MediaUrl,
+        ExternalTmdb, ExternalImdb, ExternalTvdb,
+        LibraryId, LibraryTitle, LibraryGroupId, LibraryGroupTitle,
+        ShowName, SeasonNumber, EpisodeNumber, EpisodeName
+    ];
+
+    public static readonly IReadOnlyList<NotificationParameterInfo> MediaAdded =
+    [
+        ..MediaCore,
+        MediaIndexedFilesCount,
+        BatchCount,
+        BatchKind
     ];
 
     public static readonly IReadOnlyList<NotificationParameterInfo> PlaybackCompleted =

@@ -10,9 +10,5 @@ public class MediaAddedEventDescriptor : INotificationEventDescriptor
     public NotificationEventCategory Category => NotificationEventCategory.Media;
     public string DefaultTitleTemplate => "Media ready";
     public string DefaultBodyTemplate => "{{Media.Title}} ({{Media.Type}}) is ready in the library.";
-    public IReadOnlyList<NotificationParameterInfo> Parameters { get; } =
-    [
-        ..NotificationParams.MediaCore,
-        NotificationParams.MediaIndexedFilesCount
-    ];
+    public IReadOnlyList<NotificationParameterInfo> Parameters => NotificationParams.MediaAdded;
 }

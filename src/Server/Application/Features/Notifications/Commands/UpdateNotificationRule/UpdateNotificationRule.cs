@@ -22,6 +22,7 @@ public record UpdateNotificationRuleCommand : IRequest
     public RuleGroupDto? RuleFilter { get; init; }
     public IReadOnlyList<NotificationScheduleWindowDto> ScheduleWindows { get; init; } = [];
     public int? CooldownSeconds { get; init; }
+    public int? BatchDebounceSeconds { get; init; }
     public bool IsEnabled { get; init; }
 }
 
@@ -56,6 +57,7 @@ public class UpdateNotificationRuleCommandHandler : IRequestHandler<UpdateNotifi
         entity.RuleFilter = request.RuleFilter?.ToRuleGroup();
         entity.ScheduleWindows = request.ScheduleWindows.ToDomain();
         entity.CooldownSeconds = request.CooldownSeconds;
+        entity.BatchDebounceSeconds = request.BatchDebounceSeconds;
 
         await _context.SaveChangesAsync(cancellationToken);
     }

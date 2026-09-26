@@ -17,6 +17,7 @@ public sealed record NotificationRuleDto
     public RuleGroupDto? RuleFilter { get; init; }
     public IReadOnlyList<NotificationScheduleWindowDto> ScheduleWindows { get; init; } = [];
     public int? CooldownSeconds { get; init; }
+    public int? BatchDebounceSeconds { get; init; }
     public DateTimeOffset Created { get; init; }
     public DateTimeOffset LastModified { get; init; }
 }

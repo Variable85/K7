@@ -13187,6 +13187,15 @@
             ],
             "format": "int32"
           },
+          "batchDebounceSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
           "isEnabled": {
             "type": "boolean"
           }
@@ -19217,6 +19226,15 @@
             ],
             "format": "int32"
           },
+          "batchDebounceSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
           "created": {
             "type": "string",
             "format": "date-time"
@@ -22533,6 +22551,15 @@
             }
           },
           "cooldownSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "batchDebounceSeconds": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",

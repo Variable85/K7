@@ -130,6 +130,14 @@ public class NotificationEventEnricher(
                 data["Hidden.IsSelfExcluded"] = hidden.IsSelfExcluded;
                 data["Hidden.IsAdminExcluded"] = hidden.IsAdminExcluded;
                 break;
+            case MediaAddedEvent mediaAdded:
+                data["Media.Id"] = mediaAdded.Media.Id.ToString();
+                data["MediaId"] = mediaAdded.Media.Id.ToString();
+                break;
+            case MediaCreatedEvent mediaCreated:
+                data["Media.Id"] = mediaCreated.Media.Id.ToString();
+                data["MediaId"] = mediaCreated.Media.Id.ToString();
+                break;
         }
     }
 
@@ -191,6 +199,10 @@ public class NotificationEventEnricher(
             .Include(m => ((MusicTrack)m).Artist)
             .Include(m => ((MusicAlbum)m).Artist)
             .Include(m => ((SerieEpisode)m).Serie)
+                .ThenInclude(s => s!.MetadataTags)
+                    .ThenInclude(t => t.MetadataTag)
+            .Include(m => ((SerieEpisode)m).Serie)
+                .ThenInclude(s => s!.ExternalIds)
             .Include(m => ((SerieEpisode)m).Season)
             .Include(m => ((SerieSeason)m).Serie)
             .FirstOrDefaultAsync(m => m.Id == mediaId, cancellationToken);
@@ -198,6 +210,8 @@ public class NotificationEventEnricher(
         if (media is null)
             return;
 
+        data["Media.Id"] = media.Id.ToString();
+        data["MediaId"] = media.Id.ToString();
         data["Media.Title"] = media.Title;
         data["Media.OriginalTitle"] = media.OriginalTitle;
         data["Media.Type"] = media.Type.ToString();
@@ -207,7 +221,18 @@ public class NotificationEventEnricher(
             media.MetadataTags
                 .Where(t => t.MetadataTag.Kind == MetadataTagKind.Genre)
                 .Select(t => t.MetadataTag.DisplayName));
+        data["Media.Genres.Count"] = media.MetadataTags.Count(t => t.MetadataTag.Kind == MetadataTagKind.Genre);
         data["Media.Url"] = BuildMediaUrl(media);
+        data["Media.Overview"] = media switch
+        {
+            Movie m => m.Overview,
+            Serie s => s.Overview,
+            SerieSeason season => season.Overview,
+            SerieEpisode episode => episode.Overview,
+            MusicAlbum album => album.Overview,
+            _ => null
+        };
+        data["Media.Runtime"] = media is SerieEpisode epRuntime ? epRuntime.Runtime : null;
 
         SetExternal(data, media, "tmdb", "External.Tmdb");
         SetExternal(data, media, "imdb", "External.Imdb");
@@ -231,31 +256,104 @@ public class NotificationEventEnricher(
         {
             case SerieEpisode episode:
                 data["Show.Name"] = episode.Serie?.Title;
+                data["Serie.Id"] = episode.SerieId.ToString();
                 data["Season.Number"] = episode.Season?.SeasonNumber;
                 data["Episode.Number"] = episode.EpisodeNumber;
                 data["Episode.Name"] = episode.Title;
+                if (episode.Serie is not null)
+                {
+                    SetExternal(data, episode.Serie, "tvdb", "External.Tvdb");
+                    SetExternal(data, episode.Serie, "tmdb", "External.Tmdb");
+                    SetExternal(data, episode.Serie, "imdb", "External.Imdb");
+                    if (string.IsNullOrWhiteSpace(data["Media.Overview"] as string))
+                        data["Media.Overview"] = episode.Serie.Overview;
+                    data["Media.Year"] ??= episode.Serie.ReleaseDate?.Year;
+                    if (string.IsNullOrWhiteSpace(data["Media.Genres"] as string))
+                    {
+                        data["Media.Genres"] = string.Join(", ",
+                            episode.Serie.MetadataTags
+                                .Where(t => t.MetadataTag.Kind == MetadataTagKind.Genre)
+                                .Select(t => t.MetadataTag.DisplayName));
+                    }
+                }
                 break;
             case SerieSeason season:
                 data["Show.Name"] = season.Serie?.Title;
+                data["Serie.Id"] = season.SerieId.ToString();
                 data["Season.Number"] = season.SeasonNumber;
                 break;
             case Serie serie:
                 data["Show.Name"] = serie.Title;
+                data["Serie.Id"] = serie.Id.ToString();
+                data["Media.Seasons.Count"] = await context.Medias
+                    .OfType<SerieSeason>()
+                    .AsNoTracking()
+                    .CountAsync(s => s.SerieId == serie.Id, cancellationToken);
                 break;
             case MusicTrack track:
                 data["Track.Name"] = track.Title;
                 data["Track.Number"] = track.TrackNumber;
                 data["Album.Name"] = track.Album?.Title;
+                data["Album.Id"] = track.AlbumId.ToString();
                 data["Artist.Name"] = track.Artist?.Title ?? track.Album?.Artist?.Title;
+                if (track.ArtistId is Guid trackArtistId)
+                    data["Artist.Id"] = trackArtistId.ToString();
+                else if (track.Album?.ArtistId is Guid albumArtistId)
+                    data["Artist.Id"] = albumArtistId.ToString();
                 break;
             case MusicAlbum album:
                 data["Album.Name"] = album.Title;
+                data["Album.Id"] = album.Id.ToString();
                 data["Artist.Name"] = album.Artist?.Title;
+                if (album.ArtistId is Guid artistId)
+                    data["Artist.Id"] = artistId.ToString();
                 break;
             case MusicArtist artist:
                 data["Artist.Name"] = artist.Title;
+                data["Artist.Id"] = artist.Id.ToString();
                 break;
         }
+
+        await AddLibraryFieldsAsync(data, mediaId, cancellationToken);
+    }
+
+    private async Task AddLibraryFieldsAsync(
+        Dictionary<string, object?> data,
+        Guid mediaId,
+        CancellationToken cancellationToken)
+    {
+        var libraryId = await context.IndexedFiles
+            .AsNoTracking()
+            .Where(f => f.MediaId == mediaId)
+            .Select(f => (Guid?)f.LibraryId)
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? await context.RemoteIndexedFiles
+                .AsNoTracking()
+                .Where(f => f.MediaId == mediaId)
+                .Select(f => (Guid?)f.LibraryId)
+                .FirstOrDefaultAsync(cancellationToken)
+            ?? await context.MediaLibraryAvailabilities
+                .AsNoTracking()
+                .Where(a => a.MediaId == mediaId)
+                .Select(a => (Guid?)a.LibraryId)
+                .FirstOrDefaultAsync(cancellationToken);
+
+        if (libraryId is null)
+            return;
+
+        var library = await context.Libraries
+            .AsNoTracking()
+            .Include(l => l.LibraryGroup)
+            .FirstOrDefaultAsync(l => l.Id == libraryId.Value, cancellationToken);
+
+        if (library is null)
+            return;
+
+        data["Library.Id"] = library.Id.ToString();
+        data["Library.Title"] = library.Title;
+        data["Library.MediaType"] = library.MediaType.ToString();
+        data["LibraryGroup.Id"] = library.LibraryGroupId.ToString();
+        data["LibraryGroup.Title"] = library.LibraryGroup?.Title;
     }
 
     private string? BuildMediaUrl(BaseMedia media)

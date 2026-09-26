@@ -10,14 +10,5 @@ public class MediaCreatedEventDescriptor : INotificationEventDescriptor
     public NotificationEventCategory Category => NotificationEventCategory.Media;
     public string DefaultTitleTemplate => "Media created";
     public string DefaultBodyTemplate => "{{Media.Title}} ({{Media.Type}}) was created.";
-    public IReadOnlyList<NotificationParameterInfo> Parameters { get; } =
-    [
-        NotificationParams.MediaTitle,
-        NotificationParams.MediaOriginalTitle,
-        NotificationParams.MediaType,
-        NotificationParams.MediaReleaseDate,
-        NotificationParams.MediaYear,
-        NotificationParams.MediaGenresCount,
-        NotificationParams.MediaIndexedFilesCount
-    ];
+    public IReadOnlyList<NotificationParameterInfo> Parameters => NotificationParams.MediaAdded;
 }

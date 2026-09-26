@@ -145,6 +145,7 @@ public static class DependencyInjection
         services.AddSingleton<NotificationConditionEvaluator>();
         services.AddSingleton<NotificationPayloadRenderer>();
         services.AddSingleton<NotificationEventDataSerializer>();
+        services.AddSingleton<OutboundNotificationBatcher>();
         services.AddScoped<NotificationEventEnricher>();
         services.AddScoped<OutboundNotificationDispatcher>();
         services.AddScoped<LastFmClient>();

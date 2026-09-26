@@ -99,6 +99,9 @@
   <data name="CooldownSeconds" xml:space="preserve"><value>Cooldown (optionnel)</value></data>
   <data name="CooldownSecondsField" xml:space="preserve"><value>Secondes</value></data>
   <data name="CooldownSecondsHelper" xml:space="preserve"><value>Ignore les declenchements trop rapproches pour cette regle. Laisse vide pour aucun cooldown.</value></data>
+  <data name="BatchDebounceSeconds" xml:space="preserve"><value>Regroupement media (optionnel)</value></data>
+  <data name="BatchDebounceSecondsField" xml:space="preserve"><value>Secondes</value></data>
+  <data name="BatchDebounceSecondsHelper" xml:space="preserve"><value>Only for Media pret / Media cree. Attend cette duree puis regroupe episodes/saisons sous une serie, et pistes/albums sous un album/artiste, comme la page Accueil. Film, serie racine et artiste partent tout de suite. Laisse vide pour envoyer chaque event immediatement.</value></data>
   <data name="ScheduleWindows" xml:space="preserve"><value>Plages horaires (optionnel)</value></data>
   <data name="ScheduleWindowsHelper" xml:space="preserve"><value>Optionnel. Sans plage, la regle envoie toujours. Avec une ou plusieurs plages, les evenements hors de ces creneaux sont ignores. Plusieurs plages = OU. Fuseau du serveur.</value></data>
   <data name="ScheduleWindowsEmpty" xml:space="preserve"><value>Aucune plage: envoi permanent (recommande si tu n as pas de contrainte horaire).</value></data>

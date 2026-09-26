@@ -132,14 +132,24 @@
                                                           Class="k7-rule-editor-language-select"
                                                           Style="min-width: 200px;" />
                                     }
-                                    else if (descriptor?.ValueType == RuleFieldValueType.Search && SearchSuggestionsAsync is not null)
+                                    else if (descriptor?.ValueType == RuleFieldValueType.Search
+                                             && (SearchSuggestionOptionsAsync is not null || SearchSuggestionsAsync is not null))
                                     {
                                         <K7SearchSelect Value="@(rule.Value ?? "")"
                                                         ValueChanged="(v) => OnValueChanged(group, index, v)"
                                                         Variant="outlined"
                                                         Placeholder="@GetValuePlaceholder(rule, descriptor)"
                                                         Style="width: 100%; min-width: 160px;"
-                                                        SearchAsync="(text, ct) => SearchSuggestionsAsync(rule.Field, text, ct)" />
+                                                        CommitOnSelectOnly="@(CommitSearchOnSelectOnly?.Invoke(rule.Field) == true)"
+                                                        SearchAsync="@(SearchSuggestionOptionsAsync is null && SearchSuggestionsAsync is not null
+                                                            ? (text, ct) => SearchSuggestionsAsync(rule.Field, text, ct)
+                                                            : null)"
+                                                        SearchOptionsAsync="@(SearchSuggestionOptionsAsync is not null
+                                                            ? (text, ct) => SearchForFieldOptionsAsync(rule.Field, text, ct)
+                                                            : null)"
+                                                        ResolveDisplayAsync="@(ResolveSearchDisplayAsync is not null
+                                                            ? (value, ct) => ResolveSearchDisplayAsync(rule.Field, value, ct)
+                                                            : null)" />
                                     }
                                     else
                                     {

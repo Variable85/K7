@@ -15,5 +15,6 @@ public sealed record UpdateNotificationRuleRequest
     public RuleGroupDto? RuleFilter { get; init; }
     public IReadOnlyList<NotificationScheduleWindowDto> ScheduleWindows { get; init; } = [];
     public int? CooldownSeconds { get; init; }
+    public int? BatchDebounceSeconds { get; init; }
     public bool IsEnabled { get; init; }
 }

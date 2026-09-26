@@ -99,6 +99,9 @@
   <data name="CooldownSeconds" xml:space="preserve"><value>Cooldown (optional)</value></data>
   <data name="CooldownSecondsField" xml:space="preserve"><value>Seconds</value></data>
   <data name="CooldownSecondsHelper" xml:space="preserve"><value>Skip repeats that arrive too soon for this rule. Leave empty for no cooldown.</value></data>
+  <data name="BatchDebounceSeconds" xml:space="preserve"><value>Media batching (optional)</value></data>
+  <data name="BatchDebounceSecondsField" xml:space="preserve"><value>Seconds</value></data>
+  <data name="BatchDebounceSecondsHelper" xml:space="preserve"><value>Only for Media ready / Media created. Wait this long then group episodes/seasons under a serie, and tracks/albums under an album/artist, like the Home feed. Root movie, serie, and artist send immediately. Leave empty to send each event right away.</value></data>
   <data name="ScheduleWindows" xml:space="preserve"><value>Time windows (optional)</value></data>
   <data name="ScheduleWindowsHelper" xml:space="preserve"><value>Optional. With no windows, the rule always sends. With one or more windows, events outside those slots are skipped. Multiple windows are OR. Server time zone.</value></data>
   <data name="ScheduleWindowsEmpty" xml:space="preserve"><value>No windows: always send (fine if you have no time constraint).</value></data>

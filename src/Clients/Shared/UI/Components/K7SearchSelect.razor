@@ -2,7 +2,7 @@
 
 <div class="k7-field k7-search-select @(_open ? "k7-search-select--open" : "") @(_editing ? "k7-search-select--editing" : "") @Class" style="@Style" @ref="_root">
     <K7TextField TValue="string"
-                 Value="@Value"
+                 Value="@InputText"
                  ValueChanged="OnInputChanged"
                  Variant="@Variant"
                  Placeholder="@Placeholder"
@@ -40,7 +40,7 @@
                          @onmousedown:preventDefault="true"
                          @onmousedown:stopPropagation="true"
                          @onkeydown="@(e => OnSuggestionKeyDown(e, suggestion))">
-                        @suggestion
+                        @suggestion.Label
                     </div>
                 }
             }

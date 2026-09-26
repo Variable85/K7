@@ -73,7 +73,14 @@
   <data name="ParamSessionPosition" xml:space="preserve"><value>Position</value></data>
   <data name="ParamSessionDuration" xml:space="preserve"><value>Duration</value></data>
   <data name="ParamSessionProgressPercent" xml:space="preserve"><value>Progress</value></data>
-  <data name="ParamLibraryTitle" xml:space="preserve"><value>Library</value></data>
+  <data name="ParamLibraryTitle" xml:space="preserve"><value>Library title</value></data>
+  <data name="ParamLibraryId" xml:space="preserve"><value>Library</value></data>
+  <data name="ParamLibraryGroupTitle" xml:space="preserve"><value>Library group title</value></data>
+  <data name="ParamLibraryGroupId" xml:space="preserve"><value>Library group</value></data>
+  <data name="ParamMediaOverview" xml:space="preserve"><value>Overview</value></data>
+  <data name="ParamMediaRuntime" xml:space="preserve"><value>Runtime (min)</value></data>
+  <data name="ParamBatchCount" xml:space="preserve"><value>Batch count</value></data>
+  <data name="ParamBatchKind" xml:space="preserve"><value>Batch kind</value></data>
   <data name="ParamLibraryMediaType" xml:space="preserve"><value>Library type</value></data>
   <data name="ParamDeviceName" xml:space="preserve"><value>Device name</value></data>
   <data name="ParamDeviceType" xml:space="preserve"><value>Device type</value></data>

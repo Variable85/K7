@@ -500,7 +500,8 @@ each set.
 Outbound HTTP webhooks only (event filters + payload templates). CRUD + test: `/api/notifications/rules`.
 Presets (Discord, Telegram, Slack, ntfy, Gotify, Signal) lock the message step to Raw JSON and prefill URL, method, headers, and payload.
 Each preset shows URL helper text for the placeholders to replace (`...`, `<token>`, `your-topic`, ...).
-Each rule can add time windows (server time zone, empty = always) and an optional cooldown in seconds.
+Each rule can add time windows (server time zone, empty = always), an optional cooldown in seconds, and an optional media batch debounce (Media ready / Media created only).
+Batch debounce waits for quiet time then groups leaf/mid-level adds like the Home recently-added feed: episodes and seasons under a serie, tracks under an album, albums under an artist. Top-level Movie, Serie, and MusicArtist send immediately (no batch delay). Template fields when batched: `Batch.Count`, `Batch.Kind` (`Episode` / `Season` / `Serie` / `Album` / `Artist`). Prefer `Library.Id` / `LibraryGroup.Id` for filters (UI hints show titles, stored value is the id). `Library.Title` / `LibraryGroup.Title` remain available for templates.
 Template placeholders use `{{Name}}` (simple Mustache-style). Possible enum/bool values are listed under each parameter in the UI.
 Optional advanced value maps: `{{Name|true=online|false=offline|*=fallback}}` (kept for power users, not used in default templates).
 Title + Body is only for preset None and serializes as `{"title","body"}`. Switching to Raw JSON without a preset fills that object from the current title/body.

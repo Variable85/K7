@@ -39,6 +39,7 @@ public class GetNotificationRules : IEndpoint
         RuleFilter = rule.RuleFilter?.ToRuleGroupDto(),
         ScheduleWindows = rule.ScheduleWindows.ToDto(),
         CooldownSeconds = rule.CooldownSeconds,
+        BatchDebounceSeconds = rule.BatchDebounceSeconds,
         Created = rule.Created,
         LastModified = rule.LastModified
     };

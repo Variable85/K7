@@ -97,6 +97,19 @@
                               Type="number" />
             </div>
 
+            @if (SupportsMediaBatching)
+            {
+                <div class="d-flex flex-col gap-2">
+                    <span class="text-sm text-bold">@L["BatchDebounceSeconds"]</span>
+                    <K7TextField TValue="int?" Value="_batchDebounceSeconds"
+                                  ValueChanged="v => _batchDebounceSeconds = v"
+                                  Label="@L["BatchDebounceSecondsField"]"
+                                  HelperText="@L["BatchDebounceSecondsHelper"]"
+                                  Variant="outlined"
+                                  Type="number" />
+                </div>
+            }
+
             <K7Divider />
 
             <div class="d-flex flex-col gap-2">
@@ -143,7 +156,9 @@
                 <K7RuleEditor Value="@(_ruleFilter ?? new RuleGroupDto())"
                               ValueChanged="@(v => _ruleFilter = v.Items.Count > 0 ? v : null)"
                               FieldDescriptors="GetConditionFieldDescriptors()"
-                              SearchSuggestionsAsync="SearchConditionSuggestionsAsync"
+                              SearchSuggestionOptionsAsync="SearchConditionSuggestionOptionsAsync"
+                              ResolveSearchDisplayAsync="ResolveConditionSearchDisplayAsync"
+                              CommitSearchOnSelectOnly="IsIdSearchField"
                               EmptyHint="@L["ConditionsEmptyHint"]" />
             </div>
         </div>

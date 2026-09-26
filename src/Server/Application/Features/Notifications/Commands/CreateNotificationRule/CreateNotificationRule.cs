@@ -23,6 +23,7 @@ public record CreateNotificationRuleCommand : IRequest<Guid>
     public RuleGroupDto? RuleFilter { get; init; }
     public IReadOnlyList<NotificationScheduleWindowDto> ScheduleWindows { get; init; } = [];
     public int? CooldownSeconds { get; init; }
+    public int? BatchDebounceSeconds { get; init; }
     public bool IsEnabled { get; init; } = true;
 }
 
@@ -54,7 +55,8 @@ public class CreateNotificationRuleCommandHandler : IRequestHandler<CreateNotifi
             RawJsonTemplate = request.RawJsonTemplate,
             RuleFilter = request.RuleFilter?.ToRuleGroup(),
             ScheduleWindows = request.ScheduleWindows.ToDomain(),
-            CooldownSeconds = request.CooldownSeconds
+            CooldownSeconds = request.CooldownSeconds,
+            BatchDebounceSeconds = request.BatchDebounceSeconds
         };
 
         entity.AddDomainEvent(new NotificationRuleCreatedEvent(entity));
