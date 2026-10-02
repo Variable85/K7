@@ -95,6 +95,7 @@
 @media (min-width: 600px) {
     .media-hero.movie-hero {
         padding: var(--space-10);
+        gap: var(--space-6);
     }
 
     .movie-hero .movie-tagline,
@@ -106,6 +107,10 @@
     .movie-actions-primary ::deep .movie-actions-play {
         white-space: nowrap;
     }
+}
+
+.movie-hero-copy {
+    gap: var(--space-4);
 }
 
 .movie-page-logo:not(.k7-img-wrap--custom-fallback) {
