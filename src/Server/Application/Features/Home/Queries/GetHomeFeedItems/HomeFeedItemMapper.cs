@@ -18,6 +18,7 @@ internal static class HomeFeedItemMapper
     {
         var pictures = item.Pictures?.Select(p => p.ToMetadataPictureDto(pictureSizes)).ToList();
         var userState = item.UserMediaStates.FirstOrDefault();
+        var album = item as MusicAlbum;
 
         return new HomeFeedItemDto
         {
@@ -32,7 +33,8 @@ internal static class HomeFeedItemMapper
                 _ => $"/medias/{item.Id}"
             },
             Pictures = pictures,
-            AdditionalInfo = item is MusicAlbum album ? album.Artist?.Title : null,
+            AdditionalInfo = album?.Artist?.Title,
+            RelatedArtistId = album?.ArtistId,
             ReleaseDate = item.ReleaseDate,
             Watched = userState?.IsCompleted ?? false,
             Progress = userState?.ToUserMediaStateDto().ProgressPercentage ?? 0,
@@ -55,6 +57,8 @@ internal static class HomeFeedItemMapper
         string navTarget;
         string title;
         string? additionalInfo = null;
+        Guid? relatedSerieId = null;
+        int? relatedSeasonNumber = null;
         BaseMedia detailSource = item;
 
         switch (item)
@@ -64,6 +68,8 @@ internal static class HomeFeedItemMapper
                 navTarget = $"/series/{episode.Serie?.Id ?? item.Id}/seasons/{episode.Season?.SeasonNumber ?? 0}#ep-{episode.EpisodeNumber}";
                 title = episode.Serie?.Title ?? episode.Title ?? "";
                 additionalInfo = $"S{episode.Season?.SeasonNumber ?? 0:D2}E{episode.EpisodeNumber:D2}";
+                relatedSerieId = episode.Serie?.Id;
+                relatedSeasonNumber = episode.Season?.SeasonNumber;
                 detailSource = episode.Serie ?? item;
                 break;
             default:
@@ -85,6 +91,8 @@ internal static class HomeFeedItemMapper
             NavigationTarget = navTarget,
             Pictures = pictures?.Select(p => p.ToMetadataPictureDto(pictureSizes)).ToList(),
             AdditionalInfo = additionalInfo,
+            RelatedSerieId = relatedSerieId,
+            RelatedSeasonNumber = relatedSeasonNumber,
             ReleaseDate = item.ReleaseDate,
             Watched = userState?.IsCompleted ?? false,
             Progress = userState?.ToUserMediaStateDto().ProgressPercentage ?? 0,

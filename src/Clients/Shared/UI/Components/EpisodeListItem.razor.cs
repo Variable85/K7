@@ -1,6 +1,8 @@
 ﻿using K7.Clients.Shared.Helpers;
 using K7.Clients.Shared.Interfaces;
 using K7.Clients.Shared.Models;
+using K7.Server.Domain.Enums;
+using K7.Shared.Navigation;
 using K7.Clients.Shared.Services;
 using K7.Shared.Dtos.Entities.Medias;
 using K7.Shared.Enums;
@@ -164,6 +166,23 @@ public partial class EpisodeListItem : IDisposable
     private void BuildMenuContent(RenderTreeBuilder builder)
     {
         var seq = 0;
+        var seriesHref = Episode.SerieId == Guid.Empty
+            ? null
+            : MediaPageUrls.Build(MediaType.Serie, Episode.SerieId);
+        if (!string.IsNullOrEmpty(seriesHref) && !MediaCardRelatedLinks.MatchesCard(seriesHref, Href))
+        {
+            var href = seriesHref;
+            builder.OpenComponent<K7MenuItem>(seq++);
+            builder.AddAttribute(seq++, "Icon", MediaCardRelatedMenu.Icon(MediaCardRelatedKind.Series));
+            builder.AddAttribute(seq++, "OnClick", EventCallback.Factory.Create(this, () => NavigationManager.NavigateTo(href)));
+            builder.AddAttribute(seq++, "ChildContent", (RenderFragment)(b => b.AddContent(0, L["GoToSeries"])));
+            builder.CloseComponent();
+
+            builder.OpenElement(seq++, "hr");
+            builder.AddAttribute(seq++, "class", "k7-divider");
+            builder.CloseElement();
+        }
+
         if (!IsUnavailable)
         {
             builder.OpenComponent<K7MenuItem>(seq++);

@@ -20,6 +20,10 @@
   <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
   <resheader name="version"><value>2.0</value></resheader>
   <data name="Download" xml:space="preserve"><value>Telecharger</value></data>
+  <data name="GoToSeries" xml:space="preserve"><value>Aller à la série</value></data>
+  <data name="GoToSeason" xml:space="preserve"><value>Aller à la saison</value></data>
+  <data name="GoToAlbum" xml:space="preserve"><value>Aller à l'album</value></data>
+  <data name="GoToArtist" xml:space="preserve"><value>Aller à l'artiste</value></data>
   <data name="MarkAsWatched" xml:space="preserve"><value>Marquer comme vu</value></data>
   <data name="MarkAsUnwatched" xml:space="preserve"><value>Marquer comme non vu</value></data>
 </root>

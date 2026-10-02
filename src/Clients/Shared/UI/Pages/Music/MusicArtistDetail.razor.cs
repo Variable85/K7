@@ -273,6 +273,7 @@ public partial class MusicArtistDetail : IDisposable
         IndexedFileId = track.IndexedFileId,
         Title = track.Title ?? S["Untitled"],
         AlbumTitle = track.AlbumTitle,
+        AlbumId = track.AlbumId,
         ArtistId = track.ArtistId ?? _artist?.Id,
         Genre = track.Genre,
         CoverUrl = apiClient.GetAbsoluteUri(
@@ -291,6 +292,7 @@ public partial class MusicArtistDetail : IDisposable
         Title = track.Title,
         Artist = _artist?.Title,
         ArtistId = track.ArtistId,
+        AlbumId = track.AlbumId,
         AlbumTitle = track.AlbumTitle,
         Genre = track.Genre,
         CoverUrl = track.CoverUrl,
@@ -345,6 +347,8 @@ public partial class MusicArtistDetail : IDisposable
                 MediaId = t.Id,
                 Title = t.Title,
                 Artist = _artist?.Title,
+                ArtistId = t.ArtistId,
+                AlbumId = t.AlbumId,
                 AlbumTitle = t.AlbumTitle,
                 CoverUrl = t.CoverUrl,
                 Duration = t.Duration
@@ -428,6 +432,7 @@ public partial class MusicArtistDetail : IDisposable
         public required string Title { get; init; }
         public int? Rank { get; init; }
         public string? AlbumTitle { get; init; }
+        public Guid AlbumId { get; init; }
         public Guid? ArtistId { get; init; }
         public string? Genre { get; init; }
         public string? CoverUrl { get; init; }

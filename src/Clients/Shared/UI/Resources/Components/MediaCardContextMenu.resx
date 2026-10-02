@@ -20,6 +20,10 @@
   <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
   <resheader name="version"><value>2.0</value></resheader>
   <data name="Play" xml:space="preserve"><value>Lecture</value></data>
+  <data name="GoToSeries" xml:space="preserve"><value>Aller à la série</value></data>
+  <data name="GoToSeason" xml:space="preserve"><value>Aller à la saison</value></data>
+  <data name="GoToAlbum" xml:space="preserve"><value>Aller à l'album</value></data>
+  <data name="GoToArtist" xml:space="preserve"><value>Aller à l'artiste</value></data>
   <data name="MyReview" xml:space="preserve"><value>Mon avis</value></data>
   <data name="HideForMe" xml:space="preserve"><value>Masquer pour moi</value></data>
   <data name="HideForUser" xml:space="preserve"><value>Masquer pour un utilisateur</value></data>

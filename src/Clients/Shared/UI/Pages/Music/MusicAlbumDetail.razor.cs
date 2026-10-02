@@ -251,6 +251,7 @@ public partial class MusicAlbumDetail : IDisposable
             Title = t.Title,
             Artist = t.ArtistName,
             ArtistId = t.ArtistId,
+            AlbumId = _album?.Id,
             AlbumTitle = _album?.Title,
             Genre = t.Genre,
             CoverUrl = t.CoverUrl,

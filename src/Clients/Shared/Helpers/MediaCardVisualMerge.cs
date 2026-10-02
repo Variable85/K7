@@ -22,6 +22,8 @@ public static class MediaCardVisualMerge
             && sameBackdrop
             && existing.Title == next.Title
             && existing.AdditionalInformations == next.AdditionalInformations
+            && existing.SubtitleHref == next.SubtitleHref
+            && MediaCardRelatedLinks.Same(existing.RelatedLinks, next.RelatedLinks)
             && existing.UserRating == next.UserRating)
         {
             var progressChanged = existing.Progress != next.Progress

@@ -893,6 +893,8 @@ public sealed class HomeFeedStore : IHomeFeedStore, IDisposable
         || !MediaPictureUrlHelper.SameResourceUrl(existing.BackdropUrl, next.BackdropUrl)
         || existing.Title != next.Title
         || existing.AdditionalInformations != next.AdditionalInformations
+        || existing.SubtitleHref != next.SubtitleHref
+        || !MediaCardRelatedLinks.Same(existing.RelatedLinks, next.RelatedLinks)
         || existing.Overview != next.Overview
         || existing.TagLine != next.TagLine
         || existing.ContentRating != next.ContentRating

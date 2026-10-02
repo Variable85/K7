@@ -68,10 +68,18 @@ public partial class MediaCardContextMenu
 
     private Guid _mediaId;
     private bool _hasValidMediaId;
+    private IReadOnlyList<MediaCardRelatedLink> _relatedLinks = [];
 
     protected override void OnParametersSet()
     {
         _hasValidMediaId = Model?.Id is not null && Guid.TryParse(Model.Id, out _mediaId);
+        _relatedLinks = MediaCardRelatedMenu.Visible(Model?.RelatedLinks, Href);
+    }
+
+    private void Navigate(string href)
+    {
+        if (!string.IsNullOrEmpty(href))
+            NavigationManager.NavigateTo(href);
     }
 
     private void OnPlay()

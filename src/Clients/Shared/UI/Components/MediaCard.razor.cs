@@ -81,6 +81,28 @@ public partial class MediaCard : IDisposable
 
     // Role-scoped menu flags shared across remounted cards (Virtualize recycle).
 
+    private string? DisplaySubtitle
+    {
+        get
+        {
+            if (Model is null)
+                return null;
+
+            if (!string.IsNullOrWhiteSpace(Model.AdditionalInformations))
+                return Model.AdditionalInformations;
+
+            if (Model.Kind == MediaCardKind.Season && Model.SeasonNumber is int season)
+            {
+                var template = L["SeasonNumber"].Value;
+                return template.Contains("{0}", StringComparison.Ordinal)
+                    ? string.Format(template, season)
+                    : template;
+            }
+
+            return null;
+        }
+    }
+
     private bool LongPressEnabled =>
         ContextMenuEnabled
         && (OverlayEnabled || ExcludeMenuEnabled || ContinueWatchingMenuEnabled || _watchStateMenuVisible || _showRating || _showReview || _showPlaylist || _showCollection);

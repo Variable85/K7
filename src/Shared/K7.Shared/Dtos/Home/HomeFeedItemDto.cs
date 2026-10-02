@@ -11,6 +11,10 @@ public sealed record HomeFeedItemDto
     public required string NavigationTarget { get; init; }
     public IReadOnlyList<MetadataPictureDto>? Pictures { get; init; }
     public string? AdditionalInfo { get; init; }
+    public Guid? RelatedArtistId { get; init; }
+    public Guid? RelatedSerieId { get; init; }
+    public int? RelatedSeasonNumber { get; init; }
+    public Guid? RelatedAlbumId { get; init; }
     public int GroupCount { get; init; }
     public DateOnly? ReleaseDate { get; init; }
     public bool Watched { get; init; }

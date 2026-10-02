@@ -168,7 +168,19 @@ else
             <div class="media-card-footer mt-1">
                 <div class="d-flex flex-col">
                     <span class="media-card-title"><span class="media-card-title-inner">@Model.Title</span></span>
-                    <span class="media-card-subtitle"><span class="media-card-subtitle-inner">@Model.AdditionalInformations</span></span>
+                    <span class="media-card-subtitle">
+                        @if (!string.IsNullOrEmpty(DisplaySubtitle) && !string.IsNullOrEmpty(Model.SubtitleHref))
+                        {
+                            <a class="media-card-subtitle-inner media-card-subtitle-link"
+                               href="@Model.SubtitleHref"
+                               tabindex="-1"
+                               @onclick:stopPropagation="true">@DisplaySubtitle</a>
+                        }
+                        else
+                        {
+                            <span class="media-card-subtitle-inner">@DisplaySubtitle</span>
+                        }
+                    </span>
                 </div>
             </div>
         }

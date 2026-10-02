@@ -29,7 +29,97 @@ public class LiteMediaMappingsTests
         result.Should().NotBeNull();
         result!.Title.Should().Be("Discovery");
         result.AdditionalInformations.Should().Be("Daft Punk");
+        result.SubtitleHref.Should().BeNull();
         result.ReleaseYear.Should().Be(2001);
+    }
+
+    [Test]
+    public void ToCardViewModel_ShouldLinkArtist_WhenMusicAlbumHasArtistId()
+    {
+        var artistId = Guid.NewGuid();
+        var item = new LiteMusicAlbumDto
+        {
+            Id = Guid.NewGuid(),
+            Title = "Discovery",
+            ArtistId = artistId,
+            ArtistName = "Daft Punk"
+        };
+        var apiClient = Substitute.For<IK7ServerService>();
+
+        var result = item.ToCardViewModel(apiClient, n => $"Season {n}");
+
+        result!.SubtitleHref.Should().Be($"/music/artists/{artistId}");
+        result.RelatedLinks.Should().ContainSingle(link =>
+            link.Kind == MediaCardRelatedKind.Artist && link.Href == $"/music/artists/{artistId}");
+    }
+
+    [Test]
+    public void ToCardViewModel_ShouldLinkArtistAndAlbum_ForMusicTrack()
+    {
+        var artistId = Guid.NewGuid();
+        var albumId = Guid.NewGuid();
+        var item = new LiteMusicTrackDto
+        {
+            Id = Guid.NewGuid(),
+            AlbumId = albumId,
+            ArtistId = artistId,
+            Title = "One More Time",
+            ArtistName = "Daft Punk"
+        };
+        var apiClient = Substitute.For<IK7ServerService>();
+
+        var result = item.ToCardViewModel(apiClient, n => $"Season {n}");
+
+        result!.SubtitleHref.Should().Be($"/music/artists/{artistId}");
+        result.RelatedLinks.Select(link => link.Kind).Should().Equal(
+            MediaCardRelatedKind.Album,
+            MediaCardRelatedKind.Artist);
+    }
+
+    [Test]
+    public void ToCardViewModel_ShouldLinkSerie_WhenEpisodeSubtitleIsSerieTitle()
+    {
+        var serieId = Guid.NewGuid();
+        var item = new LiteSerieEpisodeDto
+        {
+            Id = Guid.NewGuid(),
+            Title = "Pilot",
+            EpisodeNumber = 1,
+            SeasonNumber = 1,
+            SerieId = serieId,
+            SerieTitle = "Breaking Bad"
+        };
+        var apiClient = Substitute.For<IK7ServerService>();
+
+        var result = item.ToCardViewModel(apiClient, n => $"Season {n}", preferEpisodeStill: true);
+
+        result!.AdditionalInformations.Should().Be("Breaking Bad");
+        result.SubtitleHref.Should().Be($"/series/{serieId}");
+        result.RelatedLinks.Select(link => link.Kind).Should().Equal(
+            MediaCardRelatedKind.Series,
+            MediaCardRelatedKind.Season);
+    }
+
+    [Test]
+    public void ToCardViewModel_ShouldKeepEpisodeCodeAsText_WhenSubtitleIsNotSerieTitle()
+    {
+        var serieId = Guid.NewGuid();
+        var item = new LiteSerieEpisodeDto
+        {
+            Id = Guid.NewGuid(),
+            Title = "Pilot",
+            EpisodeNumber = 2,
+            SeasonNumber = 1,
+            SerieId = serieId,
+            SerieTitle = "Breaking Bad"
+        };
+        var apiClient = Substitute.For<IK7ServerService>();
+
+        var result = item.ToCardViewModel(apiClient, n => $"Season {n}");
+
+        result!.AdditionalInformations.Should().Be("S01E02");
+        result.SubtitleHref.Should().BeNull();
+        result.RelatedLinks.Should().Contain(link => link.Kind == MediaCardRelatedKind.Series);
     }
 
     [Test]
@@ -86,6 +176,98 @@ public class LiteMediaMappingsTests
         var result = item.ToCardViewModel(apiClient);
 
         result.AdditionalInformations.Should().Be("Daft Punk");
+        result.SubtitleHref.Should().BeNull();
+    }
+
+    [Test]
+    public void ToCardViewModel_ShouldLinkArtist_WhenHomeFeedAlbumHasArtistId()
+    {
+        var artistId = Guid.NewGuid();
+        var item = new HomeFeedItemDto
+        {
+            Id = Guid.NewGuid(),
+            Title = "Discovery",
+            MediaType = MediaType.MusicAlbum,
+            NavigationTarget = "/music/albums/1",
+            AdditionalInfo = "Daft Punk",
+            RelatedArtistId = artistId
+        };
+        var apiClient = Substitute.For<IK7ServerService>();
+
+        var result = item.ToCardViewModel(apiClient);
+
+        result.SubtitleHref.Should().Be($"/music/artists/{artistId}");
+        result.RelatedLinks.Should().ContainSingle(link => link.Kind == MediaCardRelatedKind.Artist);
+    }
+
+    [Test]
+    public void ToCardViewModel_ShouldUseYear_WhenHomeFeedSerieHasNoCountSubtitle()
+    {
+        var item = new HomeFeedItemDto
+        {
+            Id = Guid.NewGuid(),
+            Title = "Breaking Bad",
+            MediaType = MediaType.Serie,
+            NavigationTarget = "/series/1",
+            ReleaseDate = new DateOnly(2008, 1, 20)
+        };
+        var apiClient = Substitute.For<IK7ServerService>();
+
+        var result = item.ToCardViewModel(apiClient);
+
+        result.AdditionalInformations.Should().Be("2008");
+        result.SubtitleHref.Should().BeNull();
+        result.RelatedLinks.Should().BeEmpty();
+    }
+
+    [Test]
+    public void ToCardViewModel_ShouldLeaveSeasonSubtitleEmpty_WhenHomeFeedSeasonDropsEpisodeCount()
+    {
+        var serieId = Guid.NewGuid();
+        var item = new HomeFeedItemDto
+        {
+            Id = serieId,
+            Title = "Breaking Bad",
+            MediaType = MediaType.SerieSeason,
+            NavigationTarget = $"/series/{serieId}/seasons/2",
+            RelatedSerieId = serieId,
+            RelatedSeasonNumber = 2,
+            ReleaseDate = new DateOnly(2009, 3, 8)
+        };
+        var apiClient = Substitute.For<IK7ServerService>();
+
+        var result = item.ToCardViewModel(apiClient);
+
+        result.AdditionalInformations.Should().BeNull();
+        result.SeasonNumber.Should().Be(2);
+        result.RelatedLinks.Select(link => link.Href).Should().Equal(
+            $"/series/{serieId}",
+            $"/series/{serieId}/seasons/2");
+    }
+
+    [Test]
+    public void ToCardViewModel_ShouldKeepEpisodeCode_WhenHomeFeedEpisodeLinksToSerie()
+    {
+        var serieId = Guid.NewGuid();
+        var item = new HomeFeedItemDto
+        {
+            Id = Guid.NewGuid(),
+            Title = "Breaking Bad",
+            MediaType = MediaType.SerieEpisode,
+            NavigationTarget = $"/series/{serieId}/seasons/1#ep-2",
+            AdditionalInfo = "S01E02",
+            RelatedSerieId = serieId,
+            RelatedSeasonNumber = 1
+        };
+        var apiClient = Substitute.For<IK7ServerService>();
+
+        var result = item.ToCardViewModel(apiClient);
+
+        result.AdditionalInformations.Should().Be("S01E02");
+        result.SubtitleHref.Should().BeNull();
+        result.RelatedLinks.Select(link => link.Kind).Should().Equal(
+            MediaCardRelatedKind.Series,
+            MediaCardRelatedKind.Season);
     }
 
     [Test]

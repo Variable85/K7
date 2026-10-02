@@ -1,5 +1,16 @@
 @inject IStringLocalizer<MediaCardContextMenu> L
 
+@if (_relatedLinks.Count > 0)
+{
+    @foreach (var link in _relatedLinks)
+    {
+        var href = link.Href;
+        <K7MenuItem Icon="@MediaCardRelatedMenu.Icon(link.Kind)" OnClick="@(() => Navigate(href))">
+            @L[MediaCardRelatedMenu.LabelKey(link.Kind)]
+        </K7MenuItem>
+    }
+    <hr class="k7-divider" />
+}
 @if (ShowRating && _hasValidMediaId)
 {
     <div class="track-context-rating" @onclick:stopPropagation="true">

@@ -38,6 +38,84 @@ public class MediaCardTests
 
         // Assert
         cut.Find(".media-card-subtitle").TextContent.Should().Be("2010");
+        cut.FindAll("a.media-card-subtitle-link").Should().BeEmpty();
+    }
+
+    [Test]
+    public void Render_ShouldLinkSubtitle_WhenSubtitleHrefIsSet()
+    {
+        using var ctx = CreateContext();
+        var model = new MediaCardViewModel
+        {
+            Id = Guid.NewGuid().ToString(),
+            Kind = MediaCardKind.Cover,
+            MediaType = MediaType.MusicAlbum,
+            Title = "Discovery",
+            AdditionalInformations = "Daft Punk",
+            SubtitleHref = "/music/artists/1"
+        };
+
+        var cut = ctx.Render<MediaCard>(p => p
+            .Add(c => c.Model, model)
+            .Add(c => c.FooterVisible, true));
+
+        var link = cut.Find("a.media-card-subtitle-link");
+        link.TextContent.Should().Be("Daft Punk");
+        link.GetAttribute("href").Should().Be("/music/artists/1");
+        link.GetAttribute("tabindex").Should().Be("-1");
+    }
+
+    [Test]
+    public void Render_ShouldFormatSeasonLabel_WhenSubtitleIsEmpty()
+    {
+        using var ctx = CreateContext();
+        var model = new MediaCardViewModel
+        {
+            Id = Guid.NewGuid().ToString(),
+            Kind = MediaCardKind.Season,
+            MediaType = MediaType.SerieSeason,
+            Title = "Breaking Bad",
+            SeasonNumber = 2
+        };
+
+        var cut = ctx.Render<MediaCard>(p => p
+            .Add(c => c.Model, model)
+            .Add(c => c.FooterVisible, true));
+
+        cut.Find(".media-card-subtitle").TextContent.Should().Be("Season 2");
+        cut.FindAll(".media-card-title, .media-card-subtitle").Should().HaveCount(2);
+    }
+
+    [Test]
+    public async Task Render_ShouldShowRelatedMenuItem_WhenLinkDiffersFromCardHref()
+    {
+        using var ctx = CreateContext();
+        var model = CreateModel() with
+        {
+            RelatedLinks = [new MediaCardRelatedLink(MediaCardRelatedKind.Artist, "/music/artists/1")]
+        };
+
+        var cut = ctx.Render(BuildCardWithHost(model, overlayEnabled: true, href: "/music/albums/1"));
+        await cut.InvokeAsync(() => cut.Find(".media-card-menu-trigger").Click());
+
+        cut.FindAll(".k7-menu-item").Should().ContainSingle(item => item.TextContent.Contains("GoToArtist"));
+    }
+
+    [Test]
+    public async Task Render_ShouldHideRelatedMenuItem_WhenLinkMatchesCardHref()
+    {
+        using var ctx = CreateContext();
+        var model = CreateModel() with
+        {
+            Kind = MediaCardKind.Serie,
+            MediaType = MediaType.Serie,
+            RelatedLinks = [new MediaCardRelatedLink(MediaCardRelatedKind.Series, "/series/1")]
+        };
+
+        var cut = ctx.Render(BuildCardWithHost(model, overlayEnabled: true, href: "/series/1"));
+        await cut.InvokeAsync(() => cut.Find(".media-card-menu-trigger").Click());
+
+        cut.FindAll(".k7-menu-item-text").Select(item => item.TextContent.Trim()).Should().Equal("Play");
     }
 
     [Test]
@@ -275,7 +353,11 @@ public class MediaCardTests
 
         var mediaCardLocalizer = Substitute.For<IStringLocalizer<MediaCard>>();
         mediaCardLocalizer[Arg.Any<string>()].Returns(call =>
-            new LocalizedString(call.Arg<string>(), call.Arg<string>()));
+        {
+            var key = call.Arg<string>();
+            var value = key == "SeasonNumber" ? "Season {0}" : key;
+            return new LocalizedString(key, value);
+        });
         mediaCardLocalizer[Arg.Any<string>(), Arg.Any<object[]>()].Returns(call =>
         {
             var name = call.ArgAt<string>(0);

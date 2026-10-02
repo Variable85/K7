@@ -65,6 +65,9 @@ public static class LiteMediaMappings
                 : item.Title;
         }
 
+        var relatedLinks = MediaCardRelatedLinks.FromLite(item);
+        var additionalInformations = GetAdditionalInfo(item, seasonDto, episodeDto, seasonFormatter, preferEpisodeStill);
+
         return new MediaCardViewModel
         {
             Id = item.Id.ToString(),
@@ -75,7 +78,9 @@ public static class LiteMediaMappings
             MediaType = GetMediaType(item),
             UserRating = item.UserRating,
             Title = cardTitle,
-            AdditionalInformations = GetAdditionalInfo(item, seasonDto, episodeDto, seasonFormatter, preferEpisodeStill),
+            AdditionalInformations = additionalInformations,
+            SubtitleHref = ResolveLiteSubtitleHref(item, episodeDto, preferEpisodeStill, relatedLinks),
+            RelatedLinks = relatedLinks,
             PictureUrl = apiClient.GetAbsoluteUri(bestPicture?.GetUri(pictureSize)?.OriginalString)?.AbsoluteUri,
             BackdropUrl = apiClient.GetAbsoluteUri(
                 backdropPicture?.GetUri(MetadataPictureDisplayHelper.SizeFor(ImageDisplayRole.Hero))?.OriginalString)?.AbsoluteUri,
@@ -119,6 +124,21 @@ public static class LiteMediaMappings
         return item.ReleaseDate?.Year.ToString();
     }
 
+    private static string? ResolveLiteSubtitleHref(
+        LiteMediaDto item,
+        LiteSerieEpisodeDto? episode,
+        bool preferEpisodeStill,
+        IReadOnlyList<MediaCardRelatedLink> relatedLinks)
+    {
+        if (episode is not null && preferEpisodeStill && !string.IsNullOrEmpty(episode.SerieTitle))
+            return MediaCardRelatedLinks.SeriesHref(relatedLinks);
+
+        if (item is LiteMusicAlbumDto { ArtistName.Length: > 0 } or LiteMusicTrackDto { ArtistName.Length: > 0 })
+            return MediaCardRelatedLinks.ArtistHref(relatedLinks);
+
+        return null;
+    }
+
     public static MediaCardViewModel ToCardViewModel(
         this HomeFeedItemDto item,
         IK7ServerService apiClient,
@@ -145,14 +165,22 @@ public static class LiteMediaMappings
                 ?? item.Pictures?.FirstOrDefault();
 
         var backdropPicture = ResolveHeroBackdropPicture(item.MediaType, item.Pictures);
+        var relatedLinks = MediaCardRelatedLinks.FromHome(item);
+        var subtitle = ResolveHomeSubtitle(item);
 
         return new MediaCardViewModel
         {
             Id = item.Id.ToString(),
+            ParentId = item.RelatedSerieId?.ToString() ?? item.RelatedAlbumId?.ToString(),
+            SeasonNumber = item.RelatedSeasonNumber,
             Kind = kind,
             MediaType = item.MediaType,
             Title = item.Title,
-            AdditionalInformations = item.AdditionalInfo ?? item.ReleaseDate?.Year.ToString(),
+            AdditionalInformations = subtitle,
+            SubtitleHref = string.IsNullOrEmpty(item.AdditionalInfo)
+                ? null
+                : MediaCardRelatedLinks.ArtistHref(relatedLinks),
+            RelatedLinks = relatedLinks,
             PictureUrl = ResolveCardPictureUrl(bestPicture, apiClient, pictureSize),
             BackdropUrl = ResolveHeroPictureUrl(backdropPicture, apiClient),
             SoftHeroBackdrop = MetadataPictureDisplayHelper.ShouldSoftenTvHeroBackdrop(
@@ -169,6 +197,17 @@ public static class LiteMediaMappings
             Rating = item.Rating,
             ReleaseYear = item.ReleaseDate?.Year
         };
+    }
+
+    private static string? ResolveHomeSubtitle(HomeFeedItemDto item)
+    {
+        if (!string.IsNullOrEmpty(item.AdditionalInfo))
+            return item.AdditionalInfo;
+
+        if (item.MediaType == MediaType.SerieSeason && item.RelatedSeasonNumber is not null)
+            return null;
+
+        return item.ReleaseDate?.Year.ToString();
     }
 
     public static bool HasHeroDetails(this MediaCardViewModel item) =>
@@ -194,6 +233,9 @@ public static class LiteMediaMappings
         if (backdropPicture is null && !softHeroBackdrop)
             softHeroBackdrop = source.SoftHeroBackdrop;
 
+        var heroSubtitle = GetHeroAdditionalInformations(media);
+        var heroLinks = MediaCardRelatedLinks.FromMedia(media);
+
         return source with
         {
             Overview = GetOverview(media),
@@ -204,7 +246,11 @@ public static class LiteMediaMappings
             ReleaseYear = source.ReleaseYear ?? media.ReleaseDate?.Year,
             BackdropUrl = backdropUrl ?? source.BackdropUrl,
             SoftHeroBackdrop = softHeroBackdrop,
-            AdditionalInformations = GetHeroAdditionalInformations(media) ?? source.AdditionalInformations
+            AdditionalInformations = heroSubtitle ?? source.AdditionalInformations,
+            SubtitleHref = heroSubtitle is not null
+                ? MediaCardRelatedLinks.ArtistHref(heroLinks) ?? source.SubtitleHref
+                : source.SubtitleHref,
+            RelatedLinks = heroLinks.Count > 0 ? heroLinks : source.RelatedLinks
         };
     }
 

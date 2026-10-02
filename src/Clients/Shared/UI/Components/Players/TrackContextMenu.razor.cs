@@ -71,6 +71,7 @@ public partial class TrackContextMenu : IDisposable
     private void BuildMenuContent(RenderTreeBuilder builder)
     {
         var seq = 0;
+        AddRelatedLinks(builder, ref seq);
 
         if (_canRate)
         {
@@ -130,6 +131,40 @@ public partial class TrackContextMenu : IDisposable
             builder.CloseElement();
             AddMenuItem(builder, ref seq, "pencil-simple", L["EditMetadata"], OpenEditMetadataAsync);
         }
+    }
+
+    private void AddRelatedLinks(RenderTreeBuilder builder, ref int seq)
+    {
+        var links = MediaCardRelatedMenu.Visible(
+            MediaCardRelatedLinks.Build(albumId: Track.AlbumId, artistId: Track.ArtistId),
+            CurrentPath());
+        if (links.Count == 0)
+            return;
+
+        foreach (var link in links)
+        {
+            var href = link.Href;
+            AddMenuItem(
+                builder,
+                ref seq,
+                MediaCardRelatedMenu.Icon(link.Kind),
+                L[MediaCardRelatedMenu.LabelKey(link.Kind)],
+                () => NavigationManager.NavigateTo(href));
+        }
+
+        builder.OpenElement(seq++, "hr");
+        builder.AddAttribute(seq++, "class", "k7-divider");
+        builder.CloseElement();
+    }
+
+    private string CurrentPath()
+    {
+        var relative = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        var cut = relative.IndexOfAny(['?', '#']);
+        if (cut >= 0)
+            relative = relative[..cut];
+
+        return "/" + relative.Trim('/');
     }
 
     private void AddMenuItem(

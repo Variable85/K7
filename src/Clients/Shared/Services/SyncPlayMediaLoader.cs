@@ -55,6 +55,8 @@ public sealed class SyncPlayMediaLoader : ISyncPlayMediaLoader
                 MediaId = media.Id,
                 Title = musicTrack.Title ?? title ?? "Unknown",
                 Artist = musicTrack.ArtistName,
+                ArtistId = musicTrack.ArtistId,
+                AlbumId = musicTrack.AlbumId,
                 AlbumTitle = null,
                 CoverUrl = coverUrl
             };
@@ -141,6 +143,8 @@ public sealed class SyncPlayMediaLoader : ISyncPlayMediaLoader
                     MediaId = media.Id,
                     Title = musicTrack.Title ?? queueItem.Title,
                     Artist = musicTrack.ArtistName,
+                    ArtistId = musicTrack.ArtistId,
+                    AlbumId = musicTrack.AlbumId,
                     AlbumTitle = null,
                     CoverUrl = queueItem.CoverUrl
                 });

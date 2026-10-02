@@ -152,6 +152,8 @@ public class RemotePlaybackHandler : IDisposable
                 MediaId = request.MediaId ?? media?.Id ?? Guid.Empty,
                 Title = title ?? "Unknown",
                 Artist = request.Artist ?? (media as MusicTrackDto)?.ArtistName,
+                ArtistId = (media as MusicTrackDto)?.ArtistId,
+                AlbumId = (media as MusicTrackDto)?.AlbumId,
                 AlbumTitle = request.AlbumTitle ?? (media as MusicTrackDto)?.AlbumTitle,
                 CoverUrl = request.CoverUrl,
                 Duration = duration

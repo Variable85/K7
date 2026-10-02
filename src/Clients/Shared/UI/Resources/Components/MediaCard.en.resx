@@ -27,5 +27,6 @@
   <data name="ProgressPercent" xml:space="preserve"><value>{0}%</value></data>
   <data name="RemainingHoursMinutes" xml:space="preserve"><value>{0} h {1} min left</value></data>
   <data name="RemainingMinutes" xml:space="preserve"><value>{0} min left</value></data>
+  <data name="SeasonNumber" xml:space="preserve"><value>Season {0}</value></data>
 </root>
 

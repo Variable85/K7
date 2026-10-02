@@ -75,6 +75,7 @@ public partial class MusicTracks
         Title = t.Title,
         Artist = t.ArtistName,
         ArtistId = t.ArtistId,
+        AlbumId = t.AlbumId == Guid.Empty ? null : t.AlbumId,
         AlbumTitle = t.AlbumTitle,
         Genre = t.Genre,
         CoverUrl = t.CoverUrl,
