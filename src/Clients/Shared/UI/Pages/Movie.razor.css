@@ -125,6 +125,20 @@
     object-position: left center;
 }
 
+.movie-overview {
+    opacity: 0.85;
+    line-height: 1.6;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: var(--text-base);
+}
+
+:global(html.platform-tv) .movie-overview {
+    -webkit-line-clamp: 2;
+}
+
 .overview-clickable {
     cursor: pointer;
     border-radius: 8px;
