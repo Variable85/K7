@@ -191,7 +191,7 @@ public partial class HomeTvHero : IAsyncDisposable
         return S["DurationMinutes", minutes];
     }
 
-    private static string TruncateOverview(string text, int maxLength = 200)
+    private static string TruncateOverview(string text, int maxLength = 360)
     {
         if (text.Length <= maxLength)
             return text;
