@@ -3926,7 +3926,7 @@ K7.positionDropdown = function (root, dropdown) {
         }
         if (top < 8) top = 8;
         dropdown.style.top = (top - cbOffset.top) + 'px';
-        dropdown.style.maxHeight = 'min(320px, calc(100vh - 80px))';
+        dropdown.style.maxHeight = 'calc(100vh - 16px)';
         dropdown.style.overflowY = 'auto';
         dropdown.style.minWidth = Math.max(parentRect.width, 180) + 'px';
         dropdown.style.transform = 'none';
@@ -4021,16 +4021,17 @@ K7._positionMediaCardDropdown = function (dropdown, mediaCard, cardRect, ddRect,
         return;
     }
 
-    var maxBox = Math.min(320, vh - margin * 2);
-    dropdown.style.overflowY = 'auto';
-    dropdown.style.maxHeight = maxBox + 'px';
+    var available = Math.max(80, vh - margin * 2);
+    var needsScroll = menuHeight > available;
+    dropdown.style.overflowY = needsScroll ? 'auto' : 'visible';
+    dropdown.style.maxHeight = needsScroll ? available + 'px' : 'none';
 
     var activator = mediaCard.querySelector('.media-card-menu .media-card-menu-trigger')
         || mediaCard.querySelector('.media-card-menu .k7-menu-activator-inner');
     var trigger = activator ? activator.getBoundingClientRect() : null;
     var triggerTop = trigger && trigger.height > 0 ? trigger.top : cardRect.bottom - 48;
     var triggerBottom = trigger && trigger.height > 0 ? trigger.bottom : cardRect.bottom;
-    var cap = Math.min(menuHeight, maxBox);
+    var cap = Math.min(menuHeight, available);
     var fitsAbove = triggerTop - gap - cap >= margin;
     var fitsBelow = triggerBottom + gap + cap <= vh - margin;
     var placeAbove = fitsAbove || (!fitsBelow && (triggerTop - margin) >= (vh - triggerBottom));

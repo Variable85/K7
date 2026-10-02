@@ -939,7 +939,7 @@ details.k7-expansion[open] .k7-expansion-icon { transform: rotate(90deg); }
   transform: translateY(0);
 }
 .k7-menu-dropdown .k7-menu > .k7-menu-dropdown {
-  max-height: min(320px, calc(100vh - 80px));
+  max-height: calc(100vh - 16px);
   overflow-y: auto;
 }
 .k7-menu-dropdown--card-corner {
