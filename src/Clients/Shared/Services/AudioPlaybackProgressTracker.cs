@@ -15,6 +15,7 @@ public class AudioPlaybackProgressTracker : IDisposable
     private readonly IPlaybackJournal _journal;
     private readonly ILocalUserService _localUsers;
     private readonly ISyncPlayService? _syncPlayService;
+    private readonly ISharedProfileSessionService? _sharedProfileSession;
     private Timer? _reportTimer;
     private Guid? _currentMediaId;
     private Guid? _currentIndexedFileId;
@@ -35,7 +36,8 @@ public class AudioPlaybackProgressTracker : IDisposable
         IConnectivityService connectivity,
         IPlaybackJournal journal,
         ILocalUserService localUsers,
-        ISyncPlayService? syncPlayService = null)
+        ISyncPlayService? syncPlayService = null,
+        ISharedProfileSessionService? sharedProfileSession = null)
     {
         _audio = audio;
         _serverService = serverService;
@@ -44,6 +46,7 @@ public class AudioPlaybackProgressTracker : IDisposable
         _journal = journal;
         _localUsers = localUsers;
         _syncPlayService = syncPlayService;
+        _sharedProfileSession = sharedProfileSession;
 
         _audio.CurrentTrackChanged += OnTrackChanged;
         _audio.PlaybackStateChanged += OnPlaybackStateChanged;
@@ -135,6 +138,7 @@ public class AudioPlaybackProgressTracker : IDisposable
         {
             var deviceIdStr = _deviceStorage.Get(PreferenceKeys.DEVICE_ID);
             Guid? deviceId = Guid.TryParse(deviceIdStr, out var parsed) ? parsed : null;
+            var sharedProfileId = _sharedProfileSession?.ActiveGroupId;
             await _serverService.ReportPlaybackProgressAsync(
                 mediaId,
                 sessionId,
@@ -144,6 +148,7 @@ public class AudioPlaybackProgressTracker : IDisposable
                 (int)state,
                 deviceId,
                 _audio.ActivePlaylistId,
+                sharedProfileId: sharedProfileId,
                 syncPlayGroupId: _syncPlayService?.IsInGroup == true ? _syncPlayService.CurrentGroup?.GroupId : null,
                 indexedFileId: indexedFileId);
         }
@@ -165,10 +170,11 @@ public class AudioPlaybackProgressTracker : IDisposable
         if (string.IsNullOrEmpty(identityUserId))
             return;
 
+        var sharedProfileId = _sharedProfileSession?.ActiveGroupId;
         if (state == PlaybackState.Ended)
-            await _journal.RecordCompletedAsync(mediaId, indexedFileId, duration, identityUserId);
+            await _journal.RecordCompletedAsync(mediaId, indexedFileId, duration, identityUserId, sharedProfileId);
         else
-            await _journal.RecordProgressAsync(mediaId, indexedFileId, position, duration, identityUserId);
+            await _journal.RecordProgressAsync(mediaId, indexedFileId, position, duration, identityUserId, sharedProfileId);
     }
 
     private void StartTimer()

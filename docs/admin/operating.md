@@ -539,7 +539,7 @@ BetaSeries is posted like Jellyfin Generic Form: `application/x-www-form-urlenco
 Yamtrack, Floppy, Ryot, and BetaSeries are video-only (movies and episodes). Custom webhooks can still include music.
 A HTTP 2xx only means the remote accepted the POST. Missing external ids are still ignored server-side.
 Custom webhooks can subscribe to Play, Pause, Stop, Progress (position about every 10s while playing), and Watched/Listened (completion). Use `{{{Name}}}` for raw JSON numbers.
-On a shared profile, K7 fans out each scrobble to every member's own accounts (each member needs `CanScrobble` and an enabled destination).
+On a shared profile, K7 fans out each scrobble to every member's own accounts (each member needs `CanScrobble` and an enabled destination). Offline music stores the active profile and fans out when the journal syncs. OpenSubsonic `scrobble` and `reportPlayback` stay on the user who owns the app password. App passwords have no shared profile.
 
 Capability `CanScrobble` is on for User and Admin, not Guest.
 

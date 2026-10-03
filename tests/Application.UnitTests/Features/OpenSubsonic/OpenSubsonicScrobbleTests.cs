@@ -159,6 +159,7 @@ public class OpenSubsonicScrobbleTests
         captured.Position.Should().Be(0);
         captured.Duration.Should().Be(180);
         captured.SessionId.Should().NotBe(Guid.Empty);
+        captured.SharedProfileId.Should().BeNull();
     }
 
     [Test]

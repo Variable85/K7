@@ -122,4 +122,46 @@ public class AudioPlaybackProgressTrackerTests
         await _streaming.DidNotReceiveWithAnyArgs()
             .ReportPlaybackProgressAsync(default, default, default, default, default, default, default);
     }
+
+    [Test]
+    public async Task Report_ShouldJournalSharedProfile_WhenOffline()
+    {
+        _sut.Dispose();
+
+        var profileId = Guid.NewGuid();
+        var session = Substitute.For<ISharedProfileSessionService>();
+        session.ActiveGroupId.Returns(profileId);
+        _connectivity.IsOnline.Returns(false);
+        _sut = new AudioPlaybackProgressTracker(
+            _audio,
+            _streaming,
+            _storage,
+            _connectivity,
+            _journal,
+            _localUsers,
+            sharedProfileSession: session);
+        _sut.SetCanReport(true);
+
+        var mediaId = Guid.NewGuid();
+        var indexedFileId = Guid.NewGuid();
+        _audio.CurrentTrackChanged += Raise.Event<Action<AudioQueueItem?>>(new AudioQueueItem
+        {
+            MediaId = mediaId,
+            IndexedFileId = indexedFileId,
+            Title = "Track",
+            Artist = "Artist",
+            AlbumTitle = "Album"
+        });
+        _audio.PlaybackStateChanged += Raise.Event<Action<PlaybackState>>(PlaybackState.Playing);
+        await Task.Delay(50);
+
+        await _journal.Received().RecordProgressAsync(
+            mediaId,
+            indexedFileId,
+            Arg.Any<double>(),
+            Arg.Any<double>(),
+            "user-a",
+            profileId,
+            Arg.Any<CancellationToken>());
+    }
 }

@@ -64,6 +64,7 @@ K7 exposes an OpenSubsonic-compatible facade under `/rest`, alongside the native
 | Starred | Mapped to `UserRating` with value `> 5` (same store as star ratings in the K7 UI) |
 | Play queue | Not implemented yet (`getPlayQueue` / `savePlayQueue` return not found). Planned alongside native K7 play-queue work. |
 | Admin progress | External clients hide the active-stream progress bar until `reportPlayback` provides a timeline (`HasPlaybackProgress`). |
+| Scrobble scope | `scrobble` and `reportPlayback` record the user who owns the app password. App passwords are user-scoped and these requests are not a shared-profile session, so member fan-out does not run. |
 
 Out of scope for the facade: video, podcasts, internet radio, public shares, chat, jukebox, user admin via Subsonic, bookmarks, sonic-path OS extensions. Backlog: richer OS `transcoding` endpoints (`getTranscodeDecision` / `getTranscodeStream`).
 
