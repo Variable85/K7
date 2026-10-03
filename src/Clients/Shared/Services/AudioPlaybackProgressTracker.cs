@@ -57,6 +57,9 @@ public class AudioPlaybackProgressTracker : IDisposable
 
     private void OnTrackChanged(AudioQueueItem? newTrack)
     {
+        if (_audio.IsAwaitingRestoredPlay && _currentMediaId is null)
+            return;
+
         // Capture old track values synchronously (before the service resets them)
         var prevMediaId = _currentMediaId;
         var prevIndexedFileId = _currentIndexedFileId;
@@ -68,6 +71,13 @@ public class AudioPlaybackProgressTracker : IDisposable
 
         if (prevMediaId.HasValue && prevDuration > 0)
             _ = SendReportAsync(prevMediaId.Value, prevIndexedFileId, prevSessionId, prevPosition, prevDuration, PlaybackState.Ended);
+
+        if (_audio.IsAwaitingRestoredPlay)
+        {
+            _currentMediaId = null;
+            _currentIndexedFileId = null;
+            return;
+        }
 
         _currentMediaId = newTrack?.MediaId;
         _currentIndexedFileId = newTrack?.IndexedFileId;
@@ -93,6 +103,9 @@ public class AudioPlaybackProgressTracker : IDisposable
     private void OnPlaybackStateChanged(PlaybackState state)
     {
         _lastState = state;
+        if (_audio.IsAwaitingRestoredPlay && _currentMediaId is null)
+            return;
+
         switch (state)
         {
             case PlaybackState.Playing:

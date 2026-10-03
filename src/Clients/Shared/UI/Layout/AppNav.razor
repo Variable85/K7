@@ -122,35 +122,16 @@
                     </div>
                 </div>
                 <hr class="k7-menu-divider" />
-                @foreach (var session in NowPlaying.OtherDeviceSessions)
+                @if (ShowSessionsLink)
                 {
-                    <div class="app-nav-now-playing">
-                        <span class="app-nav-now-playing-text">@FormatNowPlaying(session)</span>
-                        <div class="app-nav-now-playing-actions">
-                            @if (GetMediaHref(session) is { } mediaHref)
-                            {
-                                <button class="k7-menu-item focusable" type="button" @onclick="@(() => NavigateNowPlaying(mediaHref))">
-                                    <span class="k7-menu-item-icon"><K7Icon Icon="@Phosphor.Info" /></span>
-                                    <span class="k7-menu-item-text">@L["GoToMedia"]</span>
-                                </button>
-                            }
-                            @if (session.CanControl)
-                            {
-                                <button class="k7-menu-item focusable" type="button" @onclick="@(() => TakeControlAsync(session))">
-                                    <span class="k7-menu-item-icon"><K7Icon Icon="@Phosphor.HandWithdraw" /></span>
-                                    <span class="k7-menu-item-text">@L["RemoteControl"]</span>
-                                </button>
-                                <button class="k7-menu-item focusable" type="button" @onclick="@(() => ResumeHereAsync(session))">
-                                    <span class="k7-menu-item-icon"><K7Icon Icon="@Phosphor.ArrowSquareIn" /></span>
-                                    <span class="k7-menu-item-text">@L["ResumeHere"]</span>
-                                </button>
-                            }
-                        </div>
-                    </div>
-                }
-                @if (NowPlaying.OtherDeviceSessions.Count > 0)
-                {
-                    <hr class="k7-menu-divider" />
+                    <NavLink class="k7-menu-item focusable" href="/sessions" @onclick="CloseAll">
+                        <span class="k7-menu-item-icon"><K7Icon Icon="@Phosphor.Queue" /></span>
+                        <span class="k7-menu-item-text">@L["Sessions"]</span>
+                        @if (NowPlayingCount > 0)
+                        {
+                            <span class="k7-menu-item-count">@NowPlayingCount</span>
+                        }
+                    </NavLink>
                 }
                 <button class="k7-menu-item focusable" type="button" @onclick="OpenSyncPlayDialog">
                     <span class="k7-menu-item-icon"><K7Icon Icon="@Phosphor.UsersThree" /></span>

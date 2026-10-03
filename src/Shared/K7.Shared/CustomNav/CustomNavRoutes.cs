@@ -17,6 +17,7 @@ public static class CustomNavRoutes
         new("/my-space/reviews", "chat-circle-text", "RouteReviews", CardColor: "#503C14"),
         new("/my-space/downloads", "download-simple", "RouteDownloads", CardColor: "#141450", NativeOnly: true),
         new("/settings", "gear", "RouteSettings"),
+        new("/sessions", "queue", "RouteSessions"),
         new("/settings/libraries", "books", "RouteLibraries"),
         new("/settings/home-layout", "house", "RouteHomeSettings"),
         new("/users", "users", "RouteUsers"),

@@ -56,6 +56,8 @@ public sealed class K7HubClient(ILogger<K7HubClient> logger) : IAsyncDisposable,
     public event Action<RemotePlaybackStateDto>? RemotePlaybackStateReceived;
     public event Action<PlaybackTakenOverDto>? PlaybackTakenOverReceived;
     public event Action<IReadOnlyList<NowPlayingSessionDto>>? NowPlayingUpdated;
+
+    public event Action? MusicSessionsChanged;
     public event Action<SyncPlayGroupDto>? SyncPlayGroupUpdated;
     public event Action<SyncPlayCommandDto>? SyncPlayCommandReceived;
     public event Action<long, double>? SyncPlayPlayAtReceived;
@@ -261,6 +263,11 @@ public sealed class K7HubClient(ILogger<K7HubClient> logger) : IAsyncDisposable,
             _hubConnection.On<IReadOnlyList<NowPlayingSessionDto>>("ReceiveNowPlayingUpdated", (sessions) =>
             {
                 NowPlayingUpdated?.Invoke(sessions);
+            });
+
+            _hubConnection.On("ReceiveMusicSessionsChanged", () =>
+            {
+                MusicSessionsChanged?.Invoke();
             });
 
             _hubConnection.On<SyncPlayGroupDto>("ReceiveSyncPlayGroupUpdated", (group) =>

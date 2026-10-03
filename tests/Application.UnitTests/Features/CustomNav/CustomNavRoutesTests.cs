@@ -22,6 +22,14 @@ public class CustomNavRoutesTests
     }
 
     [Test]
+    public void TryNormalize_ShouldAcceptSessions()
+    {
+        CustomNavRoutes.TryNormalize("/sessions", out var normalized).Should().BeTrue();
+        normalized.Should().Be("/sessions");
+        CustomNavRoutes.Find("/sessions")!.AdminOnly.Should().BeFalse();
+    }
+
+    [Test]
     public void TryNormalize_ShouldRejectExternalUrl()
     {
         CustomNavRoutes.TryNormalize("https://example.com/search", out _).Should().BeFalse();

@@ -10,6 +10,9 @@ public sealed record NowPlayingSessionDto
     public Guid? MediaId { get; init; }
     public Guid? IndexedFileId { get; init; }
     public string? MediaTitle { get; init; }
+    public string? Artist { get; init; }
+    public string? AlbumTitle { get; init; }
+    public string? SeriesTitle { get; init; }
     public string? MediaType { get; init; }
     public Guid? ParentId { get; init; }
     public int? SeasonNumber { get; init; }

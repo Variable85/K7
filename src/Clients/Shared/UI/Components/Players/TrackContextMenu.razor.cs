@@ -242,40 +242,26 @@ public partial class TrackContextMenu : IDisposable
         if (string.IsNullOrEmpty(Track.Genre))
             return;
 
-        var result = await K7ServerService.GetLiteMediasAsync(new GetMediasWithPaginationQuery
-        {
-            MediaTypes = [MediaType.MusicTrack],
-            Genres = [Track.Genre],
-            PageNumber = 1,
-            PageSize = 200
-        });
-
-        var tracks = result?.Items?.OfType<LiteMusicTrackDto>()
-            .Where(t => t.IndexedFileId.HasValue)
-            .Select(ToQueueItem)
-            .ToList();
-
-        if (tracks is { Count: > 0 })
-        {
-            if (!Audio.Shuffle)
-                Audio.ToggleShuffle();
-
-            await Audio.PlayRadioAsync(tracks, string.Format(L["RadioGenreSnackbar"], Track.Genre), Random.Shared.Next(tracks.Count));
-        }
+        await PlayServerRadioAsync(
+            MusicRadioType.Genre,
+            string.Format(L["RadioGenreSnackbar"], Track.Genre),
+            genre: Track.Genre);
     }
 
     private async Task PlayServerRadioAsync(
         MusicRadioType radioType,
         string radioTitle,
         Guid? seedTrackId = null,
-        Guid? seedArtistId = null)
+        Guid? seedArtistId = null,
+        string? genre = null)
     {
         var started = await MusicRadio.StartAsync(new MusicRadioRequest
         {
             RadioType = radioType.ToString(),
             Title = radioTitle,
             SeedTrackId = seedTrackId,
-            SeedArtistId = seedArtistId
+            SeedArtistId = seedArtistId,
+            Genre = genre
         });
 
         if (!started)

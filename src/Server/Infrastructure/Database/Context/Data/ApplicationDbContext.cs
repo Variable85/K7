@@ -60,6 +60,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>, IApplica
     public DbSet<PlaybackBookmark> PlaybackBookmarks => Set<PlaybackBookmark>();
     public DbSet<UserPlaylistState> UserPlaylistStates => Set<UserPlaylistState>();
     public DbSet<MediaPlaybackSession> MediaPlaybackSessions => Set<MediaPlaybackSession>();
+    public DbSet<DeviceMusicSession> DeviceMusicSessions => Set<DeviceMusicSession>();
     public DbSet<PlaybackSessionDetails> PlaybackSessionDetails => Set<PlaybackSessionDetails>();
     public DbSet<SharedProfile> SharedProfiles => Set<SharedProfile>();
     public DbSet<SharedProfileMember> SharedProfileMembers => Set<SharedProfileMember>();

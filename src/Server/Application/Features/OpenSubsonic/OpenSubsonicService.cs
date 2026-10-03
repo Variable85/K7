@@ -53,7 +53,6 @@ public sealed partial class OpenSubsonicService(
         "jukeboxControl",
         "createUser", "updateUser", "deleteUser", "changePassword", "getUsers",
         "createBookmark", "deleteBookmark", "getBookmarks",
-        "getPlayQueue", "savePlayQueue", "getPlayQueueByIndex", "savePlayQueueByIndex",
         "getSonicSimilarTracks", "findSonicPath",
         "getTranscodeDecision", "getTranscodeStream"
     };
@@ -113,6 +112,10 @@ public sealed partial class OpenSubsonicService(
                 "scrobble" => await ScrobbleAsync(parameters, username, canWrite, cancellationToken),
                 "reportplayback" => await ReportPlaybackAsync(parameters, username, canWrite, cancellationToken),
                 "getnowplaying" => await GetNowPlayingAsync(cancellationToken),
+                "getplayqueue" => await GetPlayQueueAsync(username, GetParam(parameters, "c"), byIndex: false, cancellationToken),
+                "saveplayqueue" => await SavePlayQueueAsync(parameters, GetParam(parameters, "c"), canWrite, byIndex: false, cancellationToken),
+                "getplayqueuebyindex" => await GetPlayQueueAsync(username, GetParam(parameters, "c"), byIndex: true, cancellationToken),
+                "saveplayqueuebyindex" => await SavePlayQueueAsync(parameters, GetParam(parameters, "c"), canWrite, byIndex: true, cancellationToken),
                 "getrandomsongs" => await GetRandomSongsAsync(parameters, cancellationToken),
                 "getsongsbygenre" => await GetSongsByGenreAsync(parameters, cancellationToken),
                 "getgenres" => await GetGenresAsync(cancellationToken),

@@ -292,6 +292,18 @@ public sealed partial class OpenSubsonicService
         if (coverId.HasValue)
             thumbnailUrl = $"/api/metadata-pictures/{coverId.Value}?size=Small";
 
+        var labels = await context.Medias.OfType<MusicTrack>()
+            .AsNoTracking()
+            .Where(t => t.Id == track.Id)
+            .Select(t => new
+            {
+                Artist = t.Artist != null
+                    ? t.Artist.Title
+                    : t.Album.Artist != null ? t.Album.Artist.Title : null,
+                Album = t.Album.Title
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
         var duration = GetDurationSeconds(track);
 
         return new ActiveStreamInfo
@@ -302,6 +314,8 @@ public sealed partial class OpenSubsonicService
             UserName = username,
             MediaId = track.Id,
             MediaTitle = track.Title,
+            Artist = labels?.Artist,
+            AlbumTitle = labels?.Album,
             MediaType = nameof(MediaType.MusicTrack),
             ParentId = track.AlbumId,
             DeviceId = deviceId,

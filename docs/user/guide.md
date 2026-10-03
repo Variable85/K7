@@ -109,7 +109,7 @@ The administrator can set **server-wide defaults**; yours override them (reset a
 |---|---|
 | Settings -> Video playback | Intro/outro skip, short skip back/forward duration, subtitle appearance, resume / continue-watching, completion threshold (marks watched; also drives home recommendations and watch stats), seekbar thumbnails, chapter markers, open trailers in YouTube (native apps and TV). On the Android/iOS/Windows apps: per-device audio passthrough (Dolby/DTS over HDMI) and, on Android TV, playback buffer size, HDMI auto frame rate (disabled / scale on TV / scale on device), and Dolby Vision (native / play as HDR10). On the Windows app: optional **MPC-HC / MPC-BE** external player (see below) |
 | Track selection | Preferred audio languages; when to show subtitles (Off, Forced only, Full, Hearing impaired) |
-| Settings -> Audio playback | Music preferences: loudness normalization, equalizer, crossfade, autoplay, streaming quality, player behavior, resume / completion threshold |
+| Settings -> Audio playback | Music preferences: loudness normalization, equalizer, crossfade, autoplay, streaming quality, player behavior, resume / completion threshold. **Remember music session** (on by default) restores this device paused. The Sessions page lists live playback and saved music queues |
 | Settings -> Scrobbling | Connect Last.fm, ListenBrainz, Trakt, or a webhook (Yamtrack, Floppy, Ryot, BetaSeries, custom). ListenBrainz tokens: listenbrainz.org/settings/. Self-hosted webhooks use URLs like `https://yamtrack.yourdomain.tld/webhook/jellyfin/{token}`. Yamtrack / Floppy / Ryot / BetaSeries are movies and episodes only. BetaSeries marks watched on completion only (needs IMDb for movies, TVDB for episodes) and does not show in-progress - API token from betaseries.com/compte/plex. Needs the CanScrobble capability (on for User and Admin). The administrator can turn scrobbling off for the whole server under Admin -> Scrobbling. Shared profile watches scrobble to every member's own accounts. Offline music keeps the profile that was active and scrobbles it when the device is back online. OpenSubsonic plays scrobble only the user who owns the app password |
 
 Seekbar thumbnails only appear if the server generated them. Chapter markers appear when **Settings -> Video playback -> chapter markers** is on (server default under Admin -> Video playback) and either the file has embedded chapters (for example MKV, when library chapter extraction is enabled) or the episode has intro/outro segments in the library. When both exist in the same time range, the seekbar shows the file chapter and skips a duplicate intro/outro tick. The first play can extract missing chapters automatically.
@@ -165,7 +165,7 @@ Almost everything personal can be tuned under **Settings**. The administrator ma
 | Libraries | Settings -> Libraries | Hide libraries you do not want to browse (among those the admin already allows); per-group tap action on Explore (suggestions vs browse) |
 | Hidden media | Settings -> Hidden | Review and unhide titles you previously hid |
 | Video and subtitles | Settings -> Video playback / track selection | Intro skip, short skip durations, subtitle look, resume rules, preferred audio / subtitle languages, open trailers in YouTube - see [Playback](#playback). Native apps also keep per-device audio passthrough, and Android TV adds playback buffer size, HDMI auto frame rate, and Dolby Vision decode. Windows can launch MPC-HC / MPC-BE |
-| Music player | Settings -> Audio playback | Music preferences: loudness normalization, equalizer, crossfade, autoplay, streaming quality, player behavior, resume |
+| Music player | Settings -> Audio playback | Music preferences: loudness normalization, equalizer, crossfade, autoplay, streaming quality, player behavior, resume, remember music session |
 | Offline | Settings -> Offline | Storage and network rules on native apps - see [Offline downloads](#offline-downloads) |
 
 Session **quality** stays in the player menu only (not a saved preference).
@@ -178,7 +178,7 @@ Paste a movie, series, season, episode, album, or artist URL into Discord, Teleg
 
 **Explore** lists your library groups as category cards. Tapping a card opens that group's feed by default, or the library browse page when **Settings -> Libraries -> tap / click action** is set to Browse (admin default: Admin -> Library groups). Long-press or right-click on a card still offers both destinations.
 
-Optional **custom navigation** (Settings -> Navigation) can pin those groups, a collection or playlist, or pages such as My Space, so they are one click from Home (or from a bar under the top menu on desktop and TV). Administrators can pin admin pages too. The Downloads page shortcut is native apps only. Overflow on that bar opens a More menu. The bar can show on Home, Explore, My Space, Settings (including admin), and/or media pages. Choose desktop, phone, and/or TV. On phones, only the Home row. The row can show on Home and/or Explore group feeds (not on phones). On TV the Home row sits under the top menu, above the hero. The Explore group grid never shows it. Home-row cards can match the target (icon, cover, color) or use a custom look. Saving or resetting navigation updates every signed-in device in real time (phone, TV, browser).
+Optional **custom navigation** (Settings -> Navigation) can pin those groups, a collection or playlist, or pages such as My Space and Sessions, so they are one click from Home (or from a bar under the top menu on desktop and TV). Administrators can pin admin pages too. The Downloads page shortcut is native apps only. Overflow on that bar opens a More menu. The bar can show on Home, Explore, My Space, Settings (including admin and Sessions), and/or media pages. Choose desktop, phone, and/or TV. On phones, only the Home row. The row can show on Home and/or Explore group feeds (not on phones). On TV the Home row sits under the top menu, above the hero. The Explore group grid never shows it. Home-row cards can match the target (icon, cover, color) or use a custom look. Saving or resetting navigation updates every signed-in device in real time (phone, TV, browser).
 
 **My Space** is your personal corner:
 
@@ -221,7 +221,7 @@ On Android, an ongoing notification keeps transfers running when the app is in t
 
 ### Remote control
 
-Control playback on another logged-in device on the **same server**. From a movie or episode page, open **Play on device** and pick the target without starting playback on the current device. From the player overlay, the same picker hands off the current title. The profile menu shows titles playing on your other devices: take remote control, resume on this device, or open the media page. Admins also see a live count of server-wide streams on the Admin item. Needs a live connection to the server.
+Control playback on another logged-in device on the **same server**. From a movie or episode page, open **Play on device** and pick the target without starting playback on the current device. From the player overlay, the same picker hands off the current title. **Sessions** in the account menu lists what is playing on your other devices (remote control, resume here, or open the media page) and saved music queues. The entry is hidden when there is nothing to show. Admins also see a live count of server-wide streams on the Admin item. Needs a live connection to the server.
 
 When playback moves to another device, the previous player can dismiss, switch to remote control, or resume locally. On the remote panel, **X** leaves control without stopping the other device. Stop still ends playback there. The gear menu matches the player overlay (audio, subtitles, speed, aspect ratio). **Open media page** leaves the remote view without stopping playback.
 
@@ -258,6 +258,14 @@ Optional. The admin connects a self-hosted [AudioMuse AI](https://github.com/Nep
 
 When on: similar radios and sonic paths under **Music -> Radio**, intelligent search in the library, similar tracks in the music player, and smart playlists from a text prompt. **Similar discovery** starts from your favorites (and most-played tracks if you have no favorites) and queues neighbors you have not heard or rated yet. **Random discovery** hides tracks you already rated, including tracks whose album you rated. Basic radios (random, time capsule, recently added) work without AudioMuse.
 
+### Music session
+
+Refreshing the page or reopening the app brings the mini player back **paused** at the last position on **this device**. Press play to continue. A paused restore is not listed as now playing until then. When the device is online at startup, a session already saved on the server is restored from there. A session removed from the server after that save is dropped locally. A session that only exists on the device, such as one captured offline, is kept and uploaded. A playlist, album, artist, or radio reloads from that source. A queue with no source, such as a search, is kept as stored, up to 100 tracks. When the queue plays through to the end, that saved session is removed. The player stays open on the last track.
+
+A phone session does not take over the web player by itself. The account menu **Sessions** opens a page with two lists. **Now playing** includes playback on this device and on your other devices. **Saved music sessions** keeps each device's queue, including this one (labeled as this device) and OpenSubsonic apps. A device that is already playing music, including this one, is listed only in the live section. A movie or episode on that device leaves the saved music queue visible. A paused restore stays in the saved list until playback starts. Each row shows the current cover, the artist and album or the series name, the playback position, and the device that owns the queue. **View media** on a saved music session opens that track. **Delete** removes that saved session. **Resume** on a saved queue starts playback here. Starting a movie or episode saves the music queue first. The mini player comes back paused at the same position when the video closes. The menu entry stays hidden when both lists are empty. Closing the mini player clears this device's saved session. Closing the Windows app saves the queue first, then the other devices move that playback into saved music sessions. Resume here clears the other device's saved music session and leaves only the playback that just started.
+
+Turn it off under **Settings -> Audio playback -> Remember music session**. Off stops saving, deletes this device's session, and skips restore.
+
 ## External music clients (OpenSubsonic)
 
 K7 works with apps like Symfonium or Feishin over OpenSubsonic.
@@ -267,7 +275,7 @@ K7 works with apps like Symfonium or Feishin over OpenSubsonic.
 3. In the client, add a Subsonic / OpenSubsonic provider with that URL.
 4. Sign in with your **K7 username** and the **app password** (not your K7 account password). Prefer HTTPS when you can.
 
-Stars in those clients use the same ratings as in K7. Listening history updates when the client reports plays. The client keeps its own play queue (K7 does not sync it yet). Scrobbling from these clients goes to the user who owns the app password. An app password cannot be attached to a shared profile.
+Stars in those clients use the same ratings as in K7. Listening history updates when the client reports plays. The play queue follows the application that saved it (the client name). Two apps do not overwrite each other, and K7 keeps at most 100 tracks. K7 does not load that queue into its own player. The app asks for it with `getPlayQueue`. Scrobbling from these clients goes to the user who owns the app password. An app password cannot be attached to a shared profile.
 
 ## When something goes wrong
 

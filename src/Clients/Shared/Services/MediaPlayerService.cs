@@ -7,14 +7,19 @@ public class MediaPlayerService : IMediaPlayerService
 {
     private readonly IPlayerService _videoPlayer;
     private readonly IAudioPlayerService _audioPlayer;
+    private readonly IMusicSessionPersistence _musicSessions;
 
     public ActivePlayerType ActivePlayer { get; private set; } = ActivePlayerType.None;
     public event Action<ActivePlayerType>? ActivePlayerChanged;
 
-    public MediaPlayerService(IPlayerService videoPlayer, IAudioPlayerService audioPlayer)
+    public MediaPlayerService(
+        IPlayerService videoPlayer,
+        IAudioPlayerService audioPlayer,
+        IMusicSessionPersistence musicSessions)
     {
         _videoPlayer = videoPlayer;
         _audioPlayer = audioPlayer;
+        _musicSessions = musicSessions;
 
         _videoPlayer.SourceChanged += OnVideoSourceChanged;
         _videoPlayer.IsVisibleChanged += OnVideoVisibilityChanged;
@@ -28,6 +33,8 @@ public class MediaPlayerService : IMediaPlayerService
     {
         if (_videoPlayer.IsVisible)
             SwitchToVideo();
+        else
+            RestoreAudioIfQueued();
     }
 
     private void OnAudioSourceChanged(PlayerSource source) => SwitchToAudio();
@@ -64,8 +71,23 @@ public class MediaPlayerService : IMediaPlayerService
         if (!_audioPlayer.IsVisible)
             return;
 
+        if (_audioPlayer.Queue is { Count: > 0 })
+        {
+            _audioPlayer.HoldResumePosition();
+            _musicSessions.Flush();
+        }
+
         _audioPlayer.Stop();
         _ = _audioPlayer.HideAsync();
+    }
+
+    private void RestoreAudioIfQueued()
+    {
+        if (_audioPlayer.IsVisible || _audioPlayer.Queue is not { Count: > 0 })
+            return;
+
+        SetActivePlayer(ActivePlayerType.Audio);
+        _ = _audioPlayer.ShowAsync();
     }
 
     private void HideVideoIfVisible()

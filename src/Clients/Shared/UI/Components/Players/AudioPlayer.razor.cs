@@ -256,7 +256,13 @@ public partial class AudioPlayer : IAsyncDisposable
         // Push per-track loudness data for normalization
         await PushTrackLoudnessAsync();
 
-        await JSRuntime.InvokeVoidAsync("audioChangeSource", ResolvePlaybackUrl(source.Url), source.MimeType);
+        await JSRuntime.InvokeVoidAsync(
+            "audioChangeSource",
+            ResolvePlaybackUrl(source.Url),
+            source.MimeType,
+            source.PendingSeekTime is > 1 ? source.PendingSeekTime : null);
+        if (source.PendingSeekTime is > 1)
+            source.PendingSeekTime = null;
         await InvokeAsync(StateHasChanged);
     }
 

@@ -653,9 +653,11 @@ window.audioSetMuted = function (muted) {
     }
 };
 
-window.audioChangeSource = async function (src, mimeType) {
+window.audioChangeSource = async function (src, mimeType, pendingSeek) {
     const el = audioState.element;
     if (!el) return;
+
+    audioState.pendingSeek = typeof pendingSeek === 'number' && pendingSeek > 1 ? pendingSeek : null;
 
     resumeAudioContext();
     cancelCrossfadeFade();
@@ -712,6 +714,10 @@ window.audioChangeSource = async function (src, mimeType) {
         revokeObjectUrls(playableSrc);
 
     el.addEventListener('canplay', function () {
+        if (typeof audioState.pendingSeek === 'number') {
+            try { el.currentTime = audioState.pendingSeek; } catch { /* ignore */ }
+            audioState.pendingSeek = null;
+        }
         el.play().catch(() => {});
     }, { once: true });
 };

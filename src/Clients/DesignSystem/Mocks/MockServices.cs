@@ -207,6 +207,7 @@ public sealed class MockAudioPlayerService : IAudioPlayerService, IDisposable
     public event Action<bool>? ShuffleChanged;
     public event Action? ActiveRadioChanged;
     public event Action? ActivePlaylistChanged;
+    public event Action? RestoredPlaybackStarted;
     public event Func<PlayerSource, double, Task>? CrossfadeRequested;
     public event Action? CrossfadeDurationChanged;
     public event Action? IsFullScreenVisibleChanged;
@@ -219,6 +220,8 @@ public sealed class MockAudioPlayerService : IAudioPlayerService, IDisposable
     private Timer? _progressTimer;
 
     public bool IsVisible { get; private set; }
+    public bool IsAwaitingRestoredPlay => false;
+    public bool IsQueueExhausted => false;
     public IReadOnlyList<AudioQueueItem> Queue => _queue;
     public IReadOnlyList<AudioQueueItem> PlayHistory => _playHistory;
     public AudioQueueItem? CurrentPlayingTrack => CurrentTrack;
@@ -229,6 +232,9 @@ public sealed class MockAudioPlayerService : IAudioPlayerService, IDisposable
     public bool Shuffle => false;
     public string? ActiveRadioTitle { get; private set; }
     public Guid? ActivePlaylistId { get; private set; }
+    public MusicSessionSourceKind SessionSource { get; private set; }
+    public Guid? SessionSourceId { get; private set; }
+    public int ShuffleSeed { get; private set; }
     public bool AdaptiveCrossfade => false;
     public double CrossfadeDuration => 0;
     public double CrossfadeTriggerWindow => 0;
@@ -254,6 +260,8 @@ public sealed class MockAudioPlayerService : IAudioPlayerService, IDisposable
         PlaybackState = PlaybackState.Paused;
         PlaybackStateChanged?.Invoke(PlaybackState);
     }
+
+    public void HoldResumePosition() { }
 
     public void Stop()
     {
@@ -322,23 +330,36 @@ public sealed class MockAudioPlayerService : IAudioPlayerService, IDisposable
         return Task.CompletedTask;
     }
 
-    public Task PlayTracksAsync(IEnumerable<AudioQueueItem> tracks, int startIndex = 0, Guid? playlistId = null, CancellationToken cancellationToken = default)
+    public Task PlayTracksAsync(
+        IEnumerable<AudioQueueItem> tracks,
+        int startIndex = 0,
+        Guid? playlistId = null,
+        MusicSessionSourceKind sourceKind = MusicSessionSourceKind.AdHoc,
+        Guid? sourceId = null,
+        CancellationToken cancellationToken = default)
     {
         ActiveRadioTitle = null;
         ActiveRadioChanged?.Invoke();
+        SessionSource = playlistId is Guid ? MusicSessionSourceKind.Playlist : sourceKind;
+        SessionSourceId = playlistId ?? sourceId;
         _queue = [.. tracks];
         CurrentIndex = startIndex;
         if (_queue.Count > 0) { SetCurrentTrack(_queue[CurrentIndex]); Play(); }
         return Task.CompletedTask;
     }
 
-    public Task PlayShuffledAsync(IEnumerable<AudioQueueItem> tracks, Guid? playlistId = null, CancellationToken cancellationToken = default)
+    public Task PlayShuffledAsync(
+        IEnumerable<AudioQueueItem> tracks,
+        Guid? playlistId = null,
+        MusicSessionSourceKind sourceKind = MusicSessionSourceKind.AdHoc,
+        Guid? sourceId = null,
+        CancellationToken cancellationToken = default)
     {
         var list = tracks as IList<AudioQueueItem> ?? tracks.ToList();
         if (list.Count == 0)
             return Task.CompletedTask;
 
-        return PlayTracksAsync(list, Random.Shared.Next(list.Count), playlistId, cancellationToken);
+        return PlayTracksAsync(list, Random.Shared.Next(list.Count), playlistId, sourceKind, sourceId, cancellationToken);
     }
 
     public Task PlayRadioAsync(IEnumerable<AudioQueueItem> tracks, string radioTitle, int startIndex = 0, CancellationToken cancellationToken = default)
@@ -362,6 +383,35 @@ public sealed class MockAudioPlayerService : IAudioPlayerService, IDisposable
     public void AddToQueueNext(AudioQueueItem track) { _queue.Insert(CurrentIndex + 1, track); QueueChanged?.Invoke(); }
     public void RemoveFromQueue(int index) { if (index >= 0 && index < _queue.Count) { _queue.RemoveAt(index); QueueChanged?.Invoke(); } }
     public void ClearQueue() { _queue.Clear(); QueueChanged?.Invoke(); }
+
+    public void RestorePaused(MusicSessionSnapshotDto snapshot, bool replace = false)
+    {
+        if (!replace && _queue.Count > 0)
+            return;
+
+        _queue = snapshot.Items.Select(item => new AudioQueueItem
+        {
+            IndexedFileId = item.IndexedFileId,
+            MediaId = item.MediaId,
+            Title = item.Title,
+            Artist = item.Artist ?? string.Empty,
+            AlbumTitle = item.AlbumTitle ?? string.Empty
+        }).ToList();
+        CurrentIndex = 0;
+        CurrentTrack = _queue.FirstOrDefault();
+        IsVisible = CurrentTrack is not null;
+        PlaybackState = PlaybackState.Paused;
+        RestoredPlaybackStarted?.Invoke();
+    }
+
+    public void ReplaceQueueFromSource(IReadOnlyList<AudioQueueItem> tracks, Guid currentMediaId, bool shuffle, int shuffleSeed)
+    {
+        _queue = tracks.ToList();
+        CurrentIndex = Math.Max(0, _queue.FindIndex(t => t.MediaId == currentMediaId));
+        ShuffleSeed = shuffle ? shuffleSeed : 0;
+        CurrentTrack = _queue.ElementAtOrDefault(CurrentIndex);
+        QueueChanged?.Invoke();
+    }
 
     public Task SkipToIndexAsync(int index, CancellationToken cancellationToken = default)
     {
@@ -1321,4 +1371,19 @@ public sealed class MockMusicIntelligenceClientService : IMusicIntelligenceClien
 
     public Task<List<Guid>> SearchTracksByLyricsAsync(string query, int count = 50, CancellationToken cancellationToken = default)
         => Task.FromResult(new List<Guid>());
+}
+
+public sealed class MockMusicSessionApi : IMusicSessionApi
+{
+    public Task<IReadOnlyList<MusicSessionSummaryDto>> GetMusicSessionsAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<MusicSessionSummaryDto>>([]);
+
+    public Task<MusicSessionSnapshotDto?> GetMusicSessionAsync(Guid deviceId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<MusicSessionSnapshotDto?>(null);
+
+    public Task UpsertMusicSessionAsync(UpsertMusicSessionRequest request, CancellationToken cancellationToken = default) =>
+        Task.CompletedTask;
+
+    public Task DeleteMusicSessionAsync(Guid deviceId, CancellationToken cancellationToken = default) =>
+        Task.CompletedTask;
 }

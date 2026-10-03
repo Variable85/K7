@@ -31,6 +31,7 @@ public partial class MainLayout : IDisposable
     [Inject] private WebViewJsBridge WebViewJsBridge { get; set; } = default!;
     [Inject] private IPlaybackSyncService PlaybackSync { get; set; } = default!;
     [Inject] private ICustomNavStore CustomNavStore { get; set; } = default!;
+    [Inject] private MusicSessionPersistenceService MusicSessions { get; set; } = default!;
 
     private K7ErrorBoundary? _errorBoundary;
     private bool _showOverlay;
@@ -172,6 +173,8 @@ public partial class MainLayout : IDisposable
                 K7HubClient.EnsureStartedAsync(baseUri, userId, deviceId, accessToken, deviceName, deviceType)
                     .FireAndForget(Logger, "Hub startup failed");
             }
+
+            await MusicSessions.BindAndRestoreAsync(userId);
         }
         catch (Exception ex)
         {
@@ -227,6 +230,15 @@ public partial class MainLayout : IDisposable
             catch (Exception ex) when (ex is JSException or InvalidOperationException or JSDisconnectedException)
             {
                 Logger.LogDebug(ex, "Windows stream fetch bridge registration failed");
+            }
+
+            try
+            {
+                await JS.InvokeVoidAsync("K7.bindMusicSessionFlush", _selfRef);
+            }
+            catch (Exception ex) when (ex is JSException or InvalidOperationException or JSDisconnectedException)
+            {
+                Logger.LogDebug(ex, "Music session flush hook failed");
             }
 
             _firstRenderDone = true;
@@ -299,6 +311,9 @@ public partial class MainLayout : IDisposable
             }, null, OverlayDelay, Timeout.InfiniteTimeSpan);
         }
     }
+
+    [JSInvokable]
+    public void FlushMusicSession() => MusicSessions.Flush();
 
     public void Dispose()
     {

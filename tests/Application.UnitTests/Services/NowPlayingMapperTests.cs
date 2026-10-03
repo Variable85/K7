@@ -41,6 +41,24 @@ public sealed class NowPlayingMapperTests
     }
 
     [Test]
+    public void FromStream_ShouldCopyMusicAndSeriesContext()
+    {
+        var stream = CreateStream(Guid.NewGuid(), "user-a", Guid.NewGuid(), Guid.NewGuid()) with
+        {
+            MediaType = nameof(MediaType.MusicTrack),
+            Artist = "K.Flay",
+            AlbumTitle = "Life as a Dog",
+            SeriesTitle = "Ignored for this assertion"
+        };
+
+        var dto = NowPlayingMapper.FromStream(stream);
+
+        dto.Artist.Should().Be("K.Flay");
+        dto.AlbumTitle.Should().Be("Life as a Dog");
+        dto.SeriesTitle.Should().Be("Ignored for this assertion");
+    }
+
+    [Test]
     public void FromStream_ShouldMarkAudio_ForMusicTrack()
     {
         var stream = CreateStream(Guid.NewGuid(), "user-a", Guid.NewGuid(), Guid.NewGuid()) with

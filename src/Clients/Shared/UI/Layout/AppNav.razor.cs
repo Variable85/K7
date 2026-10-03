@@ -6,7 +6,6 @@ using K7.Clients.Shared.UI.Components.Dialogs;
 using K7.Server.Domain.Constants;
 using K7.Shared.Dtos;
 using K7.Shared.Interfaces;
-using K7.Shared.Navigation;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Routing;
@@ -36,6 +35,8 @@ public partial class AppNav : IDisposable
     private readonly Dictionary<Guid, string> _knownParticipants = [];
     private int _adminStreamCount;
     private bool _joinedAdminStreams;
+    private int _savedSessionCount;
+    private bool _savedSessionsKnown;
 
     [Inject] private NavigationManager NavigationManager { get; set; } = default!;
     [Inject] private ISpatialNavService SpatialNav { get; set; } = default!;
@@ -51,12 +52,12 @@ public partial class AppNav : IDisposable
     [Inject] private IK7Snackbar Snackbar { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Inject] private NowPlayingService NowPlaying { get; set; } = default!;
-    [Inject] private RemotePlaybackLauncher RemotePlayback { get; set; } = default!;
-    [Inject] private ISyncPlayMediaLoader MediaLoader { get; set; } = default!;
-    [Inject] private IPlayerService Player { get; set; } = default!;
-    [Inject] private IAudioPlayerService Audio { get; set; } = default!;
+    [Inject] private IMusicSessionApi MusicSessions { get; set; } = default!;
 
     private int NowPlayingCount => NowPlaying.OtherDeviceSessions.Count;
+
+    private bool ShowSessionsLink =>
+        NowPlayingCount > 0 || _savedSessionCount > 0 || !_savedSessionsKnown;
 
     public bool IsAnyMenuOpen => _profileMenuOpen;
 
@@ -66,6 +67,7 @@ public partial class AppNav : IDisposable
         AuthenticationStateProvider.AuthenticationStateChanged += OnAuthStateChanged;
         HubClient.ConnectionStateChanged += OnConnectionStateChanged;
         NowPlaying.Changed += OnNowPlayingChanged;
+        HubClient.MusicSessionsChanged += OnMusicSessionsChanged;
         SyncPlay.GroupUpdated += OnSyncPlayGroupUpdated;
         SyncPlay.ChatMessageReceived += OnChatMessageReceived;
         SyncPlay.ErrorReceived += OnSyncPlayErrorReceived;
@@ -76,6 +78,7 @@ public partial class AppNav : IDisposable
         await AuthenticationStateProvider.GetAuthenticationStateAsync();
         await LoadAvatarAsync();
         await NowPlaying.RefreshAsync();
+        await RefreshSavedSessionsAsync();
         await BindAdminStreamCountAsync();
     }
 
@@ -148,6 +151,7 @@ public partial class AppNav : IDisposable
 
         if (_profileMenuOpen)
         {
+            _ = RefreshSavedSessionsAsync();
             StateHasChanged();
             await UpdateProfileOverlayLockAsync();
             await Task.Yield();
@@ -276,64 +280,30 @@ public partial class AppNav : IDisposable
 
     private void OnNowPlayingChanged() => InvokeAsync(StateHasChanged);
 
-    private string FormatNowPlaying(NowPlayingSessionDto session)
+    private void OnMusicSessionsChanged() => _ = RefreshSavedSessionsAsync();
+
+    private async Task RefreshSavedSessionsAsync()
     {
-        var title = string.IsNullOrWhiteSpace(session.MediaTitle) ? L["SyncPlayNoMedia"] : session.MediaTitle;
-        var device = string.IsNullOrWhiteSpace(session.DeviceName) ? session.DeviceType ?? "" : session.DeviceName;
-        return string.Format(L["NowPlayingOn"], title, device);
+        try
+        {
+            var all = await MusicSessions.GetMusicSessionsAsync();
+            _savedSessionCount = all.Count;
+            _savedSessionsKnown = true;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            _savedSessionsKnown = false;
+        }
+
+        await InvokeAsync(StateHasChanged);
     }
 
-    private static string? GetMediaHref(NowPlayingSessionDto session)
+    private void OnSharedProfileChanged() => InvokeAsync(async () =>
     {
-        if (session.MediaId is not Guid mediaId)
-            return null;
-
-        return MediaPageUrls.BuildFromTypeName(
-            session.MediaType,
-            mediaId,
-            serieId: session.ParentId,
-            seasonNumber: session.SeasonNumber,
-            episodeNumber: session.EpisodeNumber,
-            albumId: session.ParentId);
-    }
-
-    private async Task TakeControlAsync(NowPlayingSessionDto session)
-    {
-        CloseAll();
-        await RemotePlayback.AttachToDeviceAsync(session);
-    }
-
-    private void NavigateNowPlaying(string href)
-    {
-        CloseAll();
-        NavigationManager.NavigateTo(href);
-    }
-
-    private async Task ResumeHereAsync(NowPlayingSessionDto session)
-    {
-        CloseAll();
-        await RemotePlayback.NotifyLocalTakeoverAsync(
-            session.MediaTitle,
-            session.MediaId,
-            session.IndexedFileId,
-            session.IsAudio,
-            session.ThumbnailUrl,
-            session.Position,
-            session.Duration);
-
-        if (session.MediaId is not Guid mediaId)
-            return;
-
-        await MediaLoader.LoadAndPlayMediaAsync(
-            mediaId,
-            session.MediaTitle,
-            session.ThumbnailUrl,
-            session.Position > 1 ? session.Position : null,
-            indexedFileId: session.IndexedFileId,
-            audioTrackIndex: session.AudioTrackIndex,
-            subtitleTrackIndex: session.SubtitleTrackIndex,
-            playbackRate: session.PlaybackRate > 0 ? session.PlaybackRate : null);
-    }
+        UpdateSharedProfileState();
+        await RefreshSavedSessionsAsync();
+        StateHasChanged();
+    });
 
     private async Task BindAdminStreamCountAsync()
     {
@@ -374,6 +344,7 @@ public partial class AppNav : IDisposable
         AuthenticationStateProvider.AuthenticationStateChanged -= OnAuthStateChanged;
         HubClient.ConnectionStateChanged -= OnConnectionStateChanged;
         NowPlaying.Changed -= OnNowPlayingChanged;
+        HubClient.MusicSessionsChanged -= OnMusicSessionsChanged;
         if (_joinedAdminStreams)
             HubClient.ActiveStreamsUpdated -= OnAdminStreamsUpdated;
         SyncPlay.GroupUpdated -= OnSyncPlayGroupUpdated;
@@ -456,12 +427,6 @@ public partial class AppNav : IDisposable
         await DialogService.ShowAsync<SyncPlayDialog>(L["SyncPlay"], options: new K7DialogOptions { MaxWidth = K7DialogMaxWidth.Small, FullWidth = true });
         _chatOpen = false;
     }
-
-    private void OnSharedProfileChanged() => InvokeAsync(() =>
-    {
-        UpdateSharedProfileState();
-        StateHasChanged();
-    });
 
     private void UpdateSharedProfileState()
     {

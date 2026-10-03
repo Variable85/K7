@@ -65,4 +65,5 @@
   <data name="RemoteControl" xml:space="preserve"><value>Remote control</value></data>
   <data name="ResumeHere" xml:space="preserve"><value>Resume here</value></data>
   <data name="GoToMedia" xml:space="preserve"><value>View media</value></data>
+  <data name="Sessions" xml:space="preserve"><value>Sessions</value></data>
 </root>

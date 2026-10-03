@@ -9,6 +9,7 @@ public class MediaPlayerServiceTests
 {
     private IPlayerService _video = null!;
     private IAudioPlayerService _audio = null!;
+    private IMusicSessionPersistence _musicSessions = null!;
     private MediaPlayerService _sut = null!;
     private bool _videoVisible;
     private bool _audioVisible;
@@ -32,7 +33,8 @@ public class MediaPlayerServiceTests
             _audioVisible = false;
             return Task.CompletedTask;
         });
-        _sut = new MediaPlayerService(_video, _audio);
+        _musicSessions = Substitute.For<IMusicSessionPersistence>();
+        _sut = new MediaPlayerService(_video, _audio, _musicSessions);
     }
 
     [TearDown]
@@ -104,12 +106,26 @@ public class MediaPlayerServiceTests
     public void VideoSourceChanged_ShouldHideAudio_WhenAudioIsVisible()
     {
         _audioVisible = true;
+        _audio.Queue.Returns(new List<AudioQueueItem>
+        {
+            new()
+            {
+                IndexedFileId = Guid.NewGuid(),
+                MediaId = Guid.NewGuid(),
+                Title = "Can't Sleep",
+                Artist = "K.Flay",
+                AlbumTitle = "Life as a Dog"
+            }
+        });
 
         _video.SourceChanged += Raise.Event<Action<PlayerSource>>(new PlayerSource { Url = "movie" });
 
         _sut.ActivePlayer.Should().Be(ActivePlayerType.Video);
+        _musicSessions.Received(1).Flush();
+        _audio.Received(1).HoldResumePosition();
         _audio.Received(1).Stop();
         _audio.Received(1).HideAsync();
+        _audio.DidNotReceive().ClearQueue();
     }
 
     [Test]
@@ -151,6 +167,31 @@ public class MediaPlayerServiceTests
 
         _sut.ActivePlayer.Should().Be(ActivePlayerType.Video);
         _audio.DidNotReceive().Stop();
+    }
+
+    [Test]
+    public void VideoBecameHidden_ShouldShowTheMusicQueueAgain()
+    {
+        _audio.Queue.Returns(new List<AudioQueueItem>
+        {
+            new()
+            {
+                IndexedFileId = Guid.NewGuid(),
+                MediaId = Guid.NewGuid(),
+                Title = "Can't Sleep",
+                Artist = "K.Flay",
+                AlbumTitle = "Life as a Dog"
+            }
+        });
+        _videoVisible = true;
+        _video.IsVisibleChanged += Raise.Event<Action>();
+
+        _videoVisible = false;
+        _video.IsVisibleChanged += Raise.Event<Action>();
+
+        _audio.DidNotReceive().ClearQueue();
+        _audio.Received(1).ShowAsync();
+        _sut.ActivePlayer.Should().Be(ActivePlayerType.Audio);
     }
 
     [Test]

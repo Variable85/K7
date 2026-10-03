@@ -83,6 +83,10 @@ builder.Services.AddSingleton<IBackgroundTaskService, MockBackgroundTaskService>
 builder.Services.AddSingleton<IDiagnosticsService, MockDiagnosticsService>();
 builder.Services.AddSingleton<IServerInfoService, MockServerInfoService>();
 builder.Services.AddSingleton<IUserPreferencesService, MockUserPreferencesService>();
+builder.Services.AddSingleton<IMusicSessionApi, MockMusicSessionApi>();
+builder.Services.AddScoped<IMusicSessionStore, MemoryMusicSessionStore>();
+builder.Services.AddScoped<MusicSessionPersistenceService>();
+builder.Services.AddScoped<IMusicSessionPersistence>(sp => sp.GetRequiredService<MusicSessionPersistenceService>());
 builder.Services.AddSingleton<IServerPreferencesService, MockServerPreferencesService>();
 builder.Services.AddSingleton<IMusicIntelligenceClientService, MockMusicIntelligenceClientService>();
 

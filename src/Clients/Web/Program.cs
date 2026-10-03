@@ -107,6 +107,8 @@ builder.Services.AddSingleton<ILibraryGroupContextStore, LibraryGroupContextStor
 builder.Services.AddScoped<IPageFilterStorage, PageFilterStorage>();
 builder.Services.AddBlazoredLocalStorageAsSingleton();
 builder.Services.AddSingleton<IDeviceStorageService, DeviceStorageService>();
+builder.Services.AddSingleton<IMusicSessionStore, LocalStorageMusicSessionStore>();
+builder.Services.AddSingleton<IMusicSessionApi>(sp => sp.GetRequiredService<K7ServerService>());
 builder.Services.AddSingleton<ILocalUserService, StubbedLocalUserService>();
 builder.Services.AddSingleton<IDownloadManager, NoOpDownloadManager>();
 builder.Services.AddSingleton<IOfflineMediaStore, NoOpOfflineMediaStore>();
@@ -124,6 +126,8 @@ builder.Services.AddSingleton<RemoteControlService>();
 builder.Services.AddSingleton<IRemoteControlService>(sp => sp.GetRequiredService<RemoteControlService>());
 builder.Services.AddSingleton<RemotePlaybackLauncher>();
 builder.Services.AddSingleton<NowPlayingService>();
+builder.Services.AddSingleton<MusicSessionPersistenceService>();
+builder.Services.AddSingleton<IMusicSessionPersistence>(sp => sp.GetRequiredService<MusicSessionPersistenceService>());
 builder.Services.AddSingleton<SyncPlayService>();
 builder.Services.AddSingleton<ISyncPlayService>(sp => sp.GetRequiredService<SyncPlayService>());
 builder.Services.AddSingleton<ISyncPlayMediaLoader, SyncPlayMediaLoader>();
@@ -161,6 +165,7 @@ CultureInfo.DefaultThreadCurrentUICulture = culture;
 // Eagerly resolve so it starts listening to audio player events
 wasmHost.Services.GetRequiredService<AudioPlaybackProgressTracker>();
 wasmHost.Services.GetRequiredService<RemotePlaybackHandler>();
+wasmHost.Services.GetRequiredService<MusicSessionPersistenceService>();
 
 await wasmHost.RunAsync();
 

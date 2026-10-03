@@ -35,11 +35,30 @@ public sealed class MusicRadioPlaybackService : IMusicRadioPlaybackService, IDis
         _apiClient = apiClient;
         _logger = logger;
         _audio.ActiveRadioChanged += OnActiveRadioChanged;
+        _audio.RestoredPlaybackStarted += OnRestoredPlaybackStarted;
     }
 
     public bool IsLoading { get; private set; }
     public string? LoadingPresetTitle { get; private set; }
+    public MusicRadioRequest? ActiveRequest => _activeRequest;
     public event Action? LoadingStateChanged;
+
+    public void AttachWithoutPlaying(MusicRadioRequest request)
+    {
+        _refillCts?.Cancel();
+        _refillCts?.Dispose();
+        _refillCts = null;
+        _isRefilling = false;
+        _activeRequest = request;
+    }
+
+    public void BeginRefill()
+    {
+        if (_activeRequest is null || _refillCts is not null)
+            return;
+
+        StartRefillLoop();
+    }
 
     public async Task<bool> StartAsync(MusicRadioRequest request, CancellationToken cancellationToken = default)
     {
@@ -75,7 +94,14 @@ public sealed class MusicRadioPlaybackService : IMusicRadioPlaybackService, IDis
     public void Dispose()
     {
         _audio.ActiveRadioChanged -= OnActiveRadioChanged;
+        _audio.RestoredPlaybackStarted -= OnRestoredPlaybackStarted;
         StopRefill();
+    }
+
+    private void OnRestoredPlaybackStarted()
+    {
+        if (_activeRequest is not null)
+            BeginRefill();
     }
 
     private void OnActiveRadioChanged()

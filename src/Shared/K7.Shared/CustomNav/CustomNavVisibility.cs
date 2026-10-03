@@ -81,7 +81,7 @@ public static class CustomNavVisibility
         if (MatchesPrefix(normalized, "/my-space"))
             return layout.ShowBarOnMySpace;
 
-        if (IsSettingsOrAdminPath(normalized))
+        if (IsSettingsOrAdminPath(normalized) || IsSessionsPath(normalized))
             return layout.ShowBarOnSettings;
 
         if (MatchesAnyPrefix(normalized, MediaPrefixes))
@@ -115,6 +115,21 @@ public static class CustomNavVisibility
     private static bool MatchesPrefix(string path, string prefix) =>
         path.Equals(prefix, StringComparison.OrdinalIgnoreCase)
         || path.StartsWith(prefix + "/", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsSessionsPath(string path)
+    {
+        if (MatchesPrefix(path, "/sessions"))
+            return true;
+
+        var parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        foreach (var part in parts)
+        {
+            if (part.Equals("sessions", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
 
     private static bool IsSettingsOrAdminPath(string path)
     {

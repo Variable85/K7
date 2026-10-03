@@ -777,6 +777,11 @@ public class K7MediaLibraryService : MediaLibraryService,
         player.Volume = volume;
         player.SetMediaItem(itemBuilder.Build()!);
         player.Prepare();
+        if (playWhenReady && source.PendingSeekTime is > 1 and var startSeconds)
+        {
+            player.SeekTo((long)(startSeconds * 1000));
+            source.PendingSeekTime = null;
+        }
         player.PlayWhenReady = playWhenReady;
     }
 

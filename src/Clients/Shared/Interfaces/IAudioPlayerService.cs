@@ -1,6 +1,7 @@
 using K7.Clients.Shared.Enums;
 using K7.Clients.Shared.Models;
 using K7.Server.Domain.Enums;
+using K7.Shared.Dtos;
 
 namespace K7.Clients.Shared.Interfaces;
 
@@ -60,13 +61,31 @@ public interface IAudioPlayerService
     bool Shuffle { get; }
     string? ActiveRadioTitle { get; }
     Guid? ActivePlaylistId { get; }
+    MusicSessionSourceKind SessionSource { get; }
+    Guid? SessionSourceId { get; }
+    int ShuffleSeed { get; }
     event Action? ActiveRadioChanged;
     event Action? ActivePlaylistChanged;
+    event Action? RestoredPlaybackStarted;
+    /// <summary>
+    /// True after a paused restore until the user starts playback.
+    /// </summary>
+    bool IsAwaitingRestoredPlay { get; }
+
+    /// <summary>
+    /// True when playback reached the end of the queue and nothing follows.
+    /// </summary>
+    bool IsQueueExhausted { get; }
 
     // Transport controls
     void Play();
     void Pause();
     void Stop();
+    /// <summary>
+    /// Keep the current track position so the next <see cref="Play"/> seeks back to it.
+    /// Used when video hides the music player.
+    /// </summary>
+    void HoldResumePosition();
     void ForceIdle();
     void Seek(double time);
     void Mute();
@@ -75,9 +94,22 @@ public interface IAudioPlayerService
 
     // Queue management
     Task PlayTrackAsync(AudioQueueItem track, CancellationToken cancellationToken = default);
-    Task PlayTracksAsync(IEnumerable<AudioQueueItem> tracks, int startIndex = 0, Guid? playlistId = null, CancellationToken cancellationToken = default);
+    Task PlayTracksAsync(
+        IEnumerable<AudioQueueItem> tracks,
+        int startIndex = 0,
+        Guid? playlistId = null,
+        MusicSessionSourceKind sourceKind = MusicSessionSourceKind.AdHoc,
+        Guid? sourceId = null,
+        CancellationToken cancellationToken = default);
     /// <summary>Enable shuffle and start playback on a random track.</summary>
-    Task PlayShuffledAsync(IEnumerable<AudioQueueItem> tracks, Guid? playlistId = null, CancellationToken cancellationToken = default);
+    Task PlayShuffledAsync(
+        IEnumerable<AudioQueueItem> tracks,
+        Guid? playlistId = null,
+        MusicSessionSourceKind sourceKind = MusicSessionSourceKind.AdHoc,
+        Guid? sourceId = null,
+        CancellationToken cancellationToken = default);
+    void RestorePaused(MusicSessionSnapshotDto snapshot, bool replace = false);
+    void ReplaceQueueFromSource(IReadOnlyList<AudioQueueItem> tracks, Guid currentMediaId, bool shuffle, int shuffleSeed);
     Task PlayRadioAsync(IEnumerable<AudioQueueItem> tracks, string radioTitle, int startIndex = 0, CancellationToken cancellationToken = default);
     void AddToQueue(AudioQueueItem track);
     void AddToQueue(IReadOnlyList<AudioQueueItem> tracks);

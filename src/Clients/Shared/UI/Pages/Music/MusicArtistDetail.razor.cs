@@ -307,21 +307,25 @@ public partial class MusicArtistDetail : IDisposable
 
         var queueItems = BuildQueueItems();
         var index = queueItems.FindIndex(q => q.MediaId == track.Id);
-        await Audio.PlayTracksAsync(queueItems, index >= 0 ? index : 0);
+        await Audio.PlayTracksAsync(
+            queueItems,
+            index >= 0 ? index : 0,
+            sourceKind: MusicSessionSourceKind.Artist,
+            sourceId: _artist?.Id);
     }
 
     private async Task PlayAll()
     {
         var queueItems = BuildQueueItems();
         if (queueItems.Count > 0)
-            await Audio.PlayTracksAsync(queueItems, 0);
+            await Audio.PlayTracksAsync(queueItems, 0, sourceKind: MusicSessionSourceKind.Artist, sourceId: _artist?.Id);
     }
 
     private async Task ShuffleAll()
     {
         var queueItems = BuildQueueItems();
         if (queueItems.Count > 0)
-            await Audio.PlayShuffledAsync(queueItems);
+            await Audio.PlayShuffledAsync(queueItems, sourceKind: MusicSessionSourceKind.Artist, sourceId: _artist?.Id);
     }
 
     private Task OpenBiographyDialogAsync()

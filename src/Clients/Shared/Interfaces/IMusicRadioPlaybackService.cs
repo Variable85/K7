@@ -10,4 +10,7 @@ public interface IMusicRadioPlaybackService
 
     Task<bool> StartAsync(MusicRadioRequest request, CancellationToken cancellationToken = default);
     void StopRefill();
+    MusicRadioRequest? ActiveRequest { get; }
+    void AttachWithoutPlaying(MusicRadioRequest request);
+    void BeginRefill();
 }

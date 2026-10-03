@@ -18,6 +18,8 @@ public sealed class NowPlayingService : IDisposable
         _hub.ConnectionStateChanged += OnConnectionStateChanged;
     }
 
+    public IReadOnlyList<NowPlayingSessionDto> Sessions { get; private set; } = [];
+
     public IReadOnlyList<NowPlayingSessionDto> OtherDeviceSessions { get; private set; } = [];
 
     public event Action? Changed;
@@ -50,6 +52,7 @@ public sealed class NowPlayingService : IDisposable
         var currentDeviceId = _deviceStorage.Get(PreferenceKeys.DEVICE_ID);
         Guid.TryParse(currentDeviceId, out var selfId);
 
+        Sessions = sessions;
         OtherDeviceSessions = FilterOtherDevices(
             sessions,
             selfId == Guid.Empty ? null : selfId);

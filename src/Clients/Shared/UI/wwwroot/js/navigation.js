@@ -5434,3 +5434,25 @@ K7.beginSeekBarScrub = function (direction) {
 
 document.addEventListener('DOMContentLoaded', function () { SpatialNav.init(); });
 if (document.readyState !== 'loading') { SpatialNav.init(); }
+
+window.K7 = window.K7 || {};
+window.K7.bindMusicSessionFlush = function (dotNetRef) {
+    if (window.K7._musicSessionFlushBound)
+        return;
+    window.K7._musicSessionFlushBound = true;
+    var flush = function () {
+        if (!dotNetRef)
+            return;
+        var call = dotNetRef.invokeMethodAsync
+            ? dotNetRef.invokeMethodAsync('FlushMusicSession')
+            : null;
+        if (call && call.catch)
+            call.catch(function () { });
+    };
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', flush);
+    document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden')
+            flush();
+    });
+};

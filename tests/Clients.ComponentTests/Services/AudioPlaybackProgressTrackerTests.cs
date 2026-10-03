@@ -124,6 +124,27 @@ public class AudioPlaybackProgressTrackerTests
     }
 
     [Test]
+    public async Task Report_ShouldNotSend_WhenAwaitingRestoredPlay()
+    {
+        _audio.IsAwaitingRestoredPlay.Returns(true);
+        _audio.PlaybackStateChanged += Raise.Event<Action<PlaybackState>>(PlaybackState.Paused);
+        _audio.CurrentTrackChanged += Raise.Event<Action<AudioQueueItem?>>(new AudioQueueItem
+        {
+            MediaId = Guid.NewGuid(),
+            IndexedFileId = Guid.NewGuid(),
+            Title = "Track",
+            Artist = "Artist",
+            AlbumTitle = "Album",
+            Duration = 180
+        });
+        _audio.PlaybackStateChanged += Raise.Event<Action<PlaybackState>>(PlaybackState.Playing);
+        await Task.Delay(50);
+
+        await _streaming.DidNotReceiveWithAnyArgs()
+            .ReportPlaybackProgressAsync(default, default, default, default, default, default, default);
+    }
+
+    [Test]
     public async Task Report_ShouldJournalSharedProfile_WhenOffline()
     {
         _sut.Dispose();

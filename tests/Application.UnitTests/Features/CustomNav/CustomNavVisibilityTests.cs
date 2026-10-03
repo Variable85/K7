@@ -16,6 +16,7 @@ public class CustomNavVisibilityTests
         CustomNavVisibility.ShouldShowBar(layout, "/explore?library-group=1", DeviceType.Desktop).Should().BeTrue();
         CustomNavVisibility.ShouldShowBar(layout, "/my-space", DeviceType.Desktop).Should().BeFalse();
         CustomNavVisibility.ShouldShowBar(layout, "/settings", DeviceType.Desktop).Should().BeFalse();
+        CustomNavVisibility.ShouldShowBar(layout, "/sessions", DeviceType.Desktop).Should().BeFalse();
         CustomNavVisibility.ShouldShowBar(layout, "/movies/abc", DeviceType.Desktop).Should().BeFalse();
     }
 
@@ -35,6 +36,9 @@ public class CustomNavVisibilityTests
         CustomNavVisibility.ShouldShowBar(layout, "/explore", DeviceType.Desktop).Should().BeFalse();
         CustomNavVisibility.ShouldShowBar(layout, "/my-space/playlists", DeviceType.Desktop).Should().BeTrue();
         CustomNavVisibility.ShouldShowBar(layout, "/settings/account", DeviceType.Desktop).Should().BeTrue();
+        CustomNavVisibility.ShouldShowBar(layout, "/sessions", DeviceType.Desktop).Should().BeTrue();
+        CustomNavVisibility.ShouldShowBar(layout, "/k7/sessions", DeviceType.Desktop).Should().BeTrue();
+        CustomNavVisibility.ShouldShowBar(layout with { ShowOnPhone = true }, "/sessions", DeviceType.Phone).Should().BeFalse();
         CustomNavVisibility.ShouldShowBar(layout, "/movies/abc", DeviceType.Desktop).Should().BeTrue();
         CustomNavVisibility.ShouldShowBar(layout, "/library-groups/1", DeviceType.Desktop).Should().BeTrue();
         CustomNavVisibility.ShouldShowBar(layout, "/search", DeviceType.Desktop).Should().BeTrue();

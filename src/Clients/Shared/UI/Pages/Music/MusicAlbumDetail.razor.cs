@@ -207,14 +207,14 @@ public partial class MusicAlbumDetail : IDisposable
     {
         var queueItems = BuildQueueItems();
         if (queueItems.Count > 0)
-            await Audio.PlayTracksAsync(queueItems, 0);
+            await Audio.PlayTracksAsync(queueItems, 0, sourceKind: MusicSessionSourceKind.Album, sourceId: _album?.Id);
     }
 
     private async Task ShuffleAll()
     {
         var queueItems = BuildQueueItems();
         if (queueItems.Count > 0)
-            await Audio.PlayShuffledAsync(queueItems);
+            await Audio.PlayShuffledAsync(queueItems, sourceKind: MusicSessionSourceKind.Album, sourceId: _album?.Id);
     }
 
     private async Task OnTrackClick(K7.Clients.Shared.UI.Components.TableRowClickEventArgs<TrackViewModel> args)
@@ -224,7 +224,7 @@ public partial class MusicAlbumDetail : IDisposable
 
         var queueItems = BuildQueueItems();
         var index = queueItems.FindIndex(q => q.MediaId == track.Id);
-        await Audio.PlayTracksAsync(queueItems, index >= 0 ? index : 0);
+        await Audio.PlayTracksAsync(queueItems, index >= 0 ? index : 0, sourceKind: MusicSessionSourceKind.Album, sourceId: _album?.Id);
     }
 
     private List<AudioQueueItem> BuildQueueItems()

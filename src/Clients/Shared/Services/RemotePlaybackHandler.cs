@@ -560,6 +560,8 @@ public class RemotePlaybackHandler : IDisposable
         {
             if (_playerService.IsVisible)
             {
+                _progressTracker.StopTracking();
+
                 try
                 {
                     _playerService.Pause();
@@ -575,8 +577,13 @@ public class RemotePlaybackHandler : IDisposable
                 // can freeze the UI thread and block the peer Resume-here flow.
             }
 
-            if (_audioPlayerService.PlaybackState is PlaybackState.Playing or PlaybackState.Paused or PlaybackState.Buffering)
+            if (_audioPlayerService.IsVisible
+                || _audioPlayerService.PlaybackState is PlaybackState.Playing or PlaybackState.Paused or PlaybackState.Buffering)
+            {
+                _audioPlayerService.ClearQueue();
                 _audioPlayerService.Stop();
+                await _audioPlayerService.HideAsync();
+            }
         }
         catch (Exception ex)
         {

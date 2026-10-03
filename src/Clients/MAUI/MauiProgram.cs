@@ -71,12 +71,18 @@ public static partial class MauiProgram
                 {
                     WindowGeometryPersistence.Attach(nativeWindow);
                     WindowsProtocolActivation.Attach();
+                    AttachMusicSessionFlushOnClose(nativeWindow);
                 });
             });
 #elif ANDROID
             events.AddAndroid(android =>
             {
-                android.OnPause(_ => AppLifecycleGate.SetForeground(false));
+                android.OnPause(_ =>
+                {
+                    AppLifecycleGate.SetForeground(false);
+                    if (IPlatformApplication.Current?.Services is { } services)
+                        services.GetService<MusicSessionPersistenceService>()?.Flush();
+                });
                 android.OnResume(_ =>
                 {
                     AppLifecycleGate.SetForeground(true);
@@ -87,7 +93,12 @@ public static partial class MauiProgram
 #elif IOS || MACCATALYST
             events.AddiOS(ios =>
             {
-                ios.OnResignActivation(_ => AppLifecycleGate.SetForeground(false));
+                ios.OnResignActivation(_ =>
+                {
+                    AppLifecycleGate.SetForeground(false);
+                    if (IPlatformApplication.Current?.Services is { } services)
+                        services.GetService<MusicSessionPersistenceService>()?.Flush();
+                });
                 ios.OnActivated(_ =>
                 {
                     AppLifecycleGate.SetForeground(true);
@@ -158,6 +169,7 @@ public static partial class MauiProgram
         builder.Services.AddSingleton<IBackgroundTaskService>(sp => sp.GetRequiredService<K7ServerService>());
         builder.Services.AddSingleton<IDiagnosticsService>(sp => sp.GetRequiredService<K7ServerService>());
         builder.Services.AddSingleton<IUserPreferencesService>(sp => sp.GetRequiredService<K7ServerService>());
+        builder.Services.AddSingleton<IMusicSessionApi>(sp => sp.GetRequiredService<K7ServerService>());
         builder.Services.AddSingleton<IServerPreferencesService>(sp => sp.GetRequiredService<K7ServerService>());
         builder.Services.AddSingleton<IApiKeyAdminService>(sp => sp.GetRequiredService<K7ServerService>());
         builder.Services.AddSingleton<IClientAppPasswordUserService>(sp => sp.GetRequiredService<K7ServerService>());
@@ -193,6 +205,7 @@ public static partial class MauiProgram
         builder.Services.AddSingleton<IMediaStreamSession, MediaSessionService>();
         builder.Services.AddSingleton<IMediaBrowseService, MediaBrowseService>();
         builder.Services.AddSingleton<IDeviceStorageService, DeviceStorageService>();
+        builder.Services.AddSingleton<IMusicSessionStore, FileMusicSessionStore>();
         builder.Services.AddSingleton<IPageFilterStorage, PageFilterStorage>();
         builder.Services.AddSingleton<ISharedProfileApi>(sp => sp.GetRequiredService<K7ServerService>());
         builder.Services.AddSingleton<ISharedProfileLocalCache, SharedProfileLocalCache>();
@@ -256,6 +269,8 @@ public static partial class MauiProgram
         builder.Services.AddSingleton<IRemoteControlService>(sp => sp.GetRequiredService<RemoteControlService>());
         builder.Services.AddSingleton<RemotePlaybackLauncher>();
         builder.Services.AddSingleton<NowPlayingService>();
+        builder.Services.AddSingleton<MusicSessionPersistenceService>();
+        builder.Services.AddSingleton<IMusicSessionPersistence>(sp => sp.GetRequiredService<MusicSessionPersistenceService>());
         builder.Services.AddSingleton<SyncPlayService>();
         builder.Services.AddSingleton<ISyncPlayService>(sp => sp.GetRequiredService<SyncPlayService>());
         builder.Services.AddSingleton<ISyncPlayMediaLoader, SyncPlayMediaLoader>();
@@ -288,6 +303,7 @@ public static partial class MauiProgram
             {
                 app.Services.GetRequiredService<AudioPlaybackProgressTracker>();
                 app.Services.GetRequiredService<RemotePlaybackHandler>();
+                app.Services.GetRequiredService<MusicSessionPersistenceService>();
                 app.Services.GetRequiredService<IPlaybackSyncService>();
             }
             catch (Exception ex)
@@ -424,4 +440,28 @@ public static partial class MauiProgram
     }
 
     static partial void ConfigurePlatformServices(this IServiceCollection services);
+
+#if WINDOWS
+    private static void AttachMusicSessionFlushOnClose(Microsoft.UI.Xaml.Window nativeWindow)
+    {
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(nativeWindow);
+        var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
+        var appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(windowId);
+        appWindow.Closing += (_, _) =>
+        {
+            var persistence = IPlatformApplication.Current?.Services
+                .GetService<MusicSessionPersistenceService>();
+            if (persistence is null)
+                return;
+
+            try
+            {
+                Task.Run(() => persistence.FlushAsync()).Wait(TimeSpan.FromSeconds(2));
+            }
+            catch (Exception)
+            {
+            }
+        };
+    }
+#endif
 }

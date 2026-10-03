@@ -155,7 +155,7 @@ public class OpenSubsonicServiceTests
     }
 
     [Test]
-    public async Task ExecuteAsync_ShouldReturnNotFound_ForPlayQueue()
+    public async Task ExecuteAsync_ShouldReturnNotAuthenticated_ForPlayQueueWithoutUser()
     {
         var get = await _service.ExecuteAsync(
             "getPlayQueue",
@@ -169,9 +169,9 @@ public class OpenSubsonicServiceTests
             canWrite: true);
 
         get.IsFailed.Should().BeTrue();
-        get.Error!.Code.Should().Be(OpenSubsonicConstants.ErrorNotFound);
+        get.Error!.Code.Should().Be(OpenSubsonicConstants.ErrorNotAuthenticated);
         save.IsFailed.Should().BeTrue();
-        save.Error!.Code.Should().Be(OpenSubsonicConstants.ErrorNotFound);
+        save.Error!.Code.Should().Be(OpenSubsonicConstants.ErrorNotAuthenticated);
     }
 
     [Test]

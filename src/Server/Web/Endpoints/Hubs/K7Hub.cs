@@ -3,6 +3,7 @@ using System.Security.Claims;
 using K7.Server.Application.Common.Interfaces;
 using K7.Server.Application.Features.Devices.Commands.UpdateDeviceLastSeen;
 using K7.Server.Application.Features.IndexedFiles.Queries.GetStreamUri;
+using K7.Server.Application.Features.MusicSessions.Commands.DeleteDeviceMusicSession;
 using K7.Server.Application.Services;
 using K7.Server.Web.Services;
 using K7.Server.Domain.Constants;
@@ -110,9 +111,23 @@ public partial class K7Hub(
             }
 
             await BroadcastOnlineUsersPresenceToAdminsAsync();
+            await ReleaseDisconnectedDeviceAsync(deviceId);
         }
 
         await base.OnDisconnectedAsync(exception);
+    }
+
+    private async Task ReleaseDisconnectedDeviceAsync(Guid deviceId)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var tracker = scope.ServiceProvider.GetRequiredService<IActiveStreamTracker>();
+        var identities = tracker.ReleaseDevice(deviceId);
+        if (identities.Count == 0)
+            return;
+
+        var notifier = scope.ServiceProvider.GetRequiredService<INowPlayingNotifier>();
+        foreach (var identityUserId in identities)
+            await notifier.NotifyAsync(identityUserId);
     }
 
     // --- Client-to-server methods (streaming session) ---
@@ -249,7 +264,40 @@ public partial class K7Hub(
         if (string.IsNullOrEmpty(identityUserId))
             return;
 
+        await ReleaseTakenOverAsync(identityUserId, dto);
         await NotifyOthersPlaybackTakenOverAsync(identityUserId, dto, Context.ConnectionId);
+    }
+
+    private async Task ReleaseTakenOverAsync(string identityUserId, PlaybackTakenOverDto dto)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var tracker = scope.ServiceProvider.GetRequiredService<IActiveStreamTracker>();
+        var releasedDevices = tracker.ReleaseTakenOver(
+            identityUserId,
+            dto.MediaId,
+            dto.IndexedFileId,
+            dto.NewDeviceId);
+
+        if (dto.IsAudio)
+        {
+            foreach (var deviceId in releasedDevices.Distinct())
+            {
+                try
+                {
+                    await sender.Send(new DeleteDeviceMusicSessionCommand(deviceId));
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    logger.LogDebug(ex, "Failed to delete the music session taken over from device {DeviceId}", deviceId);
+                }
+            }
+        }
+
+        if (releasedDevices.Count == 0)
+            return;
+
+        var notifier = scope.ServiceProvider.GetRequiredService<INowPlayingNotifier>();
+        await notifier.NotifyAsync(identityUserId);
     }
 
     private async Task NotifyOthersPlaybackTakenOverAsync(

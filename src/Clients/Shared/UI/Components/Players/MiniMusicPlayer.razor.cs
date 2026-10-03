@@ -218,6 +218,7 @@ public partial class MiniMusicPlayer : IAsyncDisposable
 
     private async Task StopAndHide()
     {
+        Audio.ClearQueue();
         Audio.Stop();
         await Audio.HideAsync();
     }

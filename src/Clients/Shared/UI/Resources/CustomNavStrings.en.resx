@@ -31,6 +31,7 @@
   <data name="RouteReviews" xml:space="preserve"><value>Reviews</value></data>
   <data name="RouteDownloads" xml:space="preserve"><value>Downloads</value></data>
   <data name="RouteSettings" xml:space="preserve"><value>Settings</value></data>
+  <data name="RouteSessions" xml:space="preserve"><value>Sessions</value></data>
   <data name="RouteLibraries" xml:space="preserve"><value>Libraries</value></data>
   <data name="RouteHomeSettings" xml:space="preserve"><value>Home layout</value></data>
   <data name="RouteUsers" xml:space="preserve"><value>Users</value></data>

@@ -22,6 +22,7 @@ public partial class SettingsAudioPlayerPage
     private readonly SettingsFormTracker<AudioFormState> _formTracker = new();
 
     [Inject] private IUserPreferencesService UserPreferencesService { get; set; } = default!;
+    [Inject] private MusicSessionPersistenceService MusicSessions { get; set; } = default!;
 
     private bool IsDirty =>
         _settings is not null
@@ -95,6 +96,7 @@ public partial class SettingsAudioPlayerPage
                 UserPreferencesService.UpdateUserAudioPlayerSettingsAsync(_settings),
                 UserPreferencesService.UpdateUserAudioPlaybackPolicySettingsAsync(_audioPolicy));
             ApplySettingsToRuntime(_settings);
+            await MusicSessions.ApplyRememberSettingAsync(_settings.RememberMusicSession != false);
             CaptureFormState();
             await RefreshOverrideStateAsync();
             Snackbar.Add(L["Saved"], K7Severity.Success);
@@ -119,6 +121,7 @@ public partial class SettingsAudioPlayerPage
             _settings = await UserPreferencesService.GetEffectiveAudioPlayerSettingsAsync();
             _audioPolicy = await UserPreferencesService.GetEffectiveAudioPlaybackPolicySettingsAsync();
             ApplySettingsToRuntime(_settings);
+            await MusicSessions.ApplyRememberSettingAsync(_settings.RememberMusicSession != false);
             CaptureFormState();
             await RefreshOverrideStateAsync();
         }

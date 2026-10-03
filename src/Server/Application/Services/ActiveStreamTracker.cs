@@ -13,6 +13,9 @@ public sealed record ActiveStreamInfo
     public string? UserName { get; set; }
     public Guid? MediaId { get; set; }
     public string? MediaTitle { get; set; }
+    public string? Artist { get; set; }
+    public string? AlbumTitle { get; set; }
+    public string? SeriesTitle { get; set; }
     public string? MediaType { get; set; }
     public Guid? ParentId { get; set; }
     public Guid? IndexedFileId { get; set; }
@@ -46,6 +49,13 @@ public interface IActiveStreamTracker
     void UpdateStreamDecision(Guid sessionId, StreamDecisionDto decision);
     void Touch(Guid sessionId);
     void Remove(Guid sessionId);
+    /// <summary>
+    /// Drop a taken-over media from every device except the one that resumed it.
+    /// </summary>
+    IReadOnlyList<Guid> ReleaseTakenOver(string identityUserId, Guid? mediaId, Guid? indexedFileId, Guid keptDeviceId);
+
+    /// <summary>Drop every live stream on this device. Returns the identity users to notify.</summary>
+    IReadOnlyList<string> ReleaseDevice(Guid deviceId);
     ActiveStreamInfo? GetStreamInfo(Guid sessionId);
     IReadOnlyList<ActiveStreamInfo> GetActiveStreams();
 
@@ -79,6 +89,9 @@ public class ActiveStreamTracker : IActiveStreamTracker
             if (existing.MediaId == info.MediaId)
             {
                 info.ThumbnailUrl ??= existing.ThumbnailUrl;
+                info.Artist ??= existing.Artist;
+                info.AlbumTitle ??= existing.AlbumTitle;
+                info.SeriesTitle ??= existing.SeriesTitle;
                 info.StreamDecision ??= existing.StreamDecision;
                 info.IndexedFileId ??= existing.IndexedFileId;
                 info.SeasonNumber ??= existing.SeasonNumber;
@@ -121,6 +134,85 @@ public class ActiveStreamTracker : IActiveStreamTracker
 
         _streams[sessionId] = info;
         _openSubsonicPending.TryRemove(sessionId, out _);
+        ReleaseOtherSessionsOnDevice(sessionId, info);
+    }
+
+    public IReadOnlyList<Guid> ReleaseTakenOver(
+        string identityUserId,
+        Guid? mediaId,
+        Guid? indexedFileId,
+        Guid keptDeviceId)
+    {
+        if (string.IsNullOrEmpty(identityUserId) || keptDeviceId == Guid.Empty)
+            return [];
+
+        if (mediaId is null && indexedFileId is null)
+            return [];
+
+        var removedDevices = new List<Guid>();
+        var keys = _streams
+            .Where(kv => string.Equals(kv.Value.IdentityUserId, identityUserId, StringComparison.Ordinal)
+                && kv.Value.DeviceId is Guid deviceId
+                && deviceId != keptDeviceId
+                && MatchesTakenMedia(kv.Value, mediaId, indexedFileId))
+            .Select(kv => kv.Key)
+            .ToList();
+
+        foreach (var key in keys)
+        {
+            if (_streams.TryGetValue(key, out var info) && info.DeviceId is Guid deviceId)
+                removedDevices.Add(deviceId);
+            Remove(key);
+        }
+
+        return removedDevices;
+    }
+
+    public IReadOnlyList<string> ReleaseDevice(Guid deviceId)
+    {
+        if (deviceId == Guid.Empty)
+            return [];
+
+        var identities = new HashSet<string>(StringComparer.Ordinal);
+        var keys = _streams
+            .Where(kv => kv.Value.DeviceId == deviceId)
+            .Select(kv => kv.Key)
+            .ToList();
+
+        foreach (var key in keys)
+        {
+            if (_streams.TryGetValue(key, out var info)
+                && !string.IsNullOrEmpty(info.IdentityUserId))
+                identities.Add(info.IdentityUserId);
+
+            Remove(key);
+        }
+
+        return identities.ToList();
+    }
+
+    private void ReleaseOtherSessionsOnDevice(Guid sessionId, ActiveStreamInfo info)
+    {
+        if (info.DeviceId is not Guid deviceId || info.UserId is not Guid userId)
+            return;
+
+        var others = _streams
+            .Where(kv => kv.Key != sessionId
+                && kv.Value.UserId == userId
+                && kv.Value.DeviceId == deviceId)
+            .Select(kv => kv.Key)
+            .ToList();
+
+        foreach (var key in others)
+            Remove(key);
+    }
+
+    private static bool MatchesTakenMedia(ActiveStreamInfo info, Guid? mediaId, Guid? indexedFileId)
+    {
+        if (mediaId is Guid id && info.MediaId == id)
+            return true;
+
+        return indexedFileId is Guid fileId && info.IndexedFileId == fileId;
     }
 
     public void UpdateStreamDecision(Guid sessionId, StreamDecisionDto decision)

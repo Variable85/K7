@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+              <xsd:attribute name="xml:space" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <data name="PageTitle" xml:space="preserve"><value>Sessions</value></data>
+  <data name="Live" xml:space="preserve"><value>Now playing</value></data>
+  <data name="Saved" xml:space="preserve"><value>Saved music sessions</value></data>
+  <data name="EmptyLive" xml:space="preserve"><value>Nothing playing</value></data>
+  <data name="EmptySaved" xml:space="preserve"><value>No saved music session</value></data>
+  <data name="ThisDevice" xml:space="preserve"><value>This device</value></data>
+  <data name="Loading" xml:space="preserve"><value>Loading...</value></data>
+  <data name="Untitled" xml:space="preserve"><value>Untitled</value></data>
+  <data name="Resume" xml:space="preserve"><value>Resume</value></data>
+  <data name="ResumeHere" xml:space="preserve"><value>Resume here</value></data>
+  <data name="RemoteControl" xml:space="preserve"><value>Remote control</value></data>
+  <data name="GoToMedia" xml:space="preserve"><value>View media</value></data>
+  <data name="Delete" xml:space="preserve"><value>Delete</value></data>
+</root>

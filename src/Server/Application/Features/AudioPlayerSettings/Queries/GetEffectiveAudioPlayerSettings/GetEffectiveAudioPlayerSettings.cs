@@ -20,13 +20,20 @@ public class GetEffectiveAudioPlayerSettingsQueryHandler(
         {
             var userJson = await userSettingsService.GetAsync(userId, UserSettingKeys.AudioPlayerSettings, cancellationToken);
             if (userJson is not null)
-                return JsonSerializer.Deserialize<AudioPlayerSettingsDto>(userJson) ?? new AudioPlayerSettingsDto();
+                return Normalize(JsonSerializer.Deserialize<AudioPlayerSettingsDto>(userJson));
         }
 
         var serverJson = await serverSettingsService.GetAsync(ServerSettingKeys.AudioPlayerSettings, cancellationToken);
         if (serverJson is not null)
-            return JsonSerializer.Deserialize<AudioPlayerSettingsDto>(serverJson) ?? new AudioPlayerSettingsDto();
+            return Normalize(JsonSerializer.Deserialize<AudioPlayerSettingsDto>(serverJson));
 
-        return new AudioPlayerSettingsDto();
+        return Normalize(null);
+    }
+
+    private static AudioPlayerSettingsDto Normalize(AudioPlayerSettingsDto? settings)
+    {
+        settings ??= new AudioPlayerSettingsDto();
+        settings.RememberMusicSession ??= true;
+        return settings;
     }
 }

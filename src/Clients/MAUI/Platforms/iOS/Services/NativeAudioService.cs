@@ -133,6 +133,11 @@ public class NativeAudioService : NSObject, IDisposable
         player.Volume = startVolume;
         player.Pause();
         player.ReplaceCurrentItemWithPlayerItem(playerItem);
+        if (source.PendingSeekTime is > 1 and var startSeconds)
+        {
+            player.Seek(CoreMedia.CMTime.FromSeconds(startSeconds, 1));
+            source.PendingSeekTime = null;
+        }
         player.Play();
         _equalizer.AttachToPlayerItem(playerItem);
 

@@ -120,6 +120,7 @@
 
     <section class="d-flex flex-col gap-3">
         <h6>@L["PlayerBehavior"]</h6>
+        <K7Switch Label="@L["RememberMusicSession"]" Value="Settings.RememberMusicSession != false" ValueChanged="v => OnChanged(s => s.RememberMusicSession = v)" />
         <K7Switch Label="@L["ShowFullscreenOnPlay"]" Value="Settings.ShowFullscreenOnPlay" ValueChanged="v => OnChanged(s => s.ShowFullscreenOnPlay = v)" />
         <K7Switch Label="@L["KeepScreenOn"]" Value="Settings.KeepScreenOn" ValueChanged="v => OnChanged(s => s.KeepScreenOn = v)" />
         <K7Slider TValue="int" Min="5" Max="30" Step="5" Immediate="true"

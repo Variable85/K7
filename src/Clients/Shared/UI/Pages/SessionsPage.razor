@@ -1,0 +1,162 @@
+@page "/sessions"
+@layout MainLayout
+@inject IStringLocalizer<SessionsPage> L
+@implements IDisposable
+
+<PageTitle>@L["PageTitle"]</PageTitle>
+
+<div class="sessions-page page-scrollable">
+    <header class="sessions-page__header">
+        <h5>@L["PageTitle"]</h5>
+    </header>
+
+    @if (_loading)
+    {
+        <p class="text-muted">@L["Loading"]</p>
+    }
+    else
+    {
+        <section class="sessions-page__section">
+            <h6>@L["Live"]</h6>
+            @if (LiveSessions.Count == 0)
+            {
+                <K7EmptyState Compact="true" Icon="@Phosphor.PlayCircle" Title="@L["EmptyLive"]" />
+            }
+            else
+            {
+                <div class="sessions-page__list">
+                    @foreach (var session in LiveSessions)
+                    {
+                        var live = session;
+                        <K7Paper Outlined="true" Class="@(live.IsAudio ? "session-card session-card--music" : "session-card session-card--video")">
+                            <div class="session-card__main">
+                            <div class="session-card__poster">
+                                @if (!string.IsNullOrEmpty(live.ThumbnailUrl))
+                                {
+                                    <K7Image Src="@live.ThumbnailUrl" Alt="@live.MediaTitle" Class="session-card__img" ObjectFit="cover" />
+                                }
+                                else
+                                {
+                                    <div class="session-card__placeholder">
+                                        <K7Icon Icon="@(live.IsAudio ? Phosphor.MusicNotes : Phosphor.FilmSlate)" />
+                                    </div>
+                                }
+                            </div>
+                            <div class="session-card__body">
+                                <span class="session-card__title">@(string.IsNullOrWhiteSpace(live.MediaTitle) ? L["Untitled"] : live.MediaTitle)</span>
+                                @if (LiveContext(live) is { } liveContext)
+                                {
+                                    <span class="session-card__artist">@liveContext</span>
+                                }
+                                <span class="session-card__device">
+                                    @if (IsThisDevice(live.DeviceId))
+                                    {
+                                        <K7Chip Size="sm" Variant="outlined" Color="primary" Text="@L["ThisDevice"]" />
+                                    }
+                                    else
+                                    {
+                                        <K7Icon Icon="@Phosphor.Devices" IconSize="@K7IconSize.Sm" />
+                                        @DeviceLabel(live.DeviceName, live.DeviceType)
+                                    }
+                                </span>
+                                @if (live.Duration > 0)
+                                {
+                                    <div class="session-card__progress">
+                                        <K7ProgressBar Value="@LiveProgress(live)" />
+                                        <div class="session-card__times">
+                                            <span>@FormatClock(live.Position)</span>
+                                            <span>@FormatClock(live.Duration)</span>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                            </div>
+                            <div class="session-card__actions">
+                                @if (MediaHref(live) is { } href)
+                                {
+                                    <K7Button Variant="text" Size="sm" StartIcon="@Phosphor.Info" OnClick="@(() => Navigation.NavigateTo(href))">@L["GoToMedia"]</K7Button>
+                                }
+                                @if (live.CanControl && !IsThisDevice(live.DeviceId))
+                                {
+                                    <K7Button Variant="text" Size="sm" StartIcon="@Phosphor.HandWithdraw" OnClick="@(() => TakeControlAsync(live))">@L["RemoteControl"]</K7Button>
+                                    <K7Button Variant="filled" Size="sm" Color="primary" StartIcon="@Phosphor.Play" OnClick="@(() => ResumeHereAsync(live))">@L["ResumeHere"]</K7Button>
+                                }
+                            </div>
+                        </K7Paper>
+                    }
+                </div>
+            }
+        </section>
+
+        <section class="sessions-page__section">
+            <h6>@L["Saved"]</h6>
+            @if (VisibleSaved.Count == 0)
+            {
+                <K7EmptyState Compact="true" Icon="@Phosphor.Queue" Title="@L["EmptySaved"]" />
+            }
+            else
+            {
+                <div class="sessions-page__list">
+                    @foreach (var session in VisibleSaved)
+                    {
+                        var saved = session;
+                        <K7Paper Outlined="true" Class="session-card session-card--music">
+                            <div class="session-card__main">
+                            <div class="session-card__poster">
+                                @if (!string.IsNullOrEmpty(saved.CoverUrl))
+                                {
+                                    <K7Image Src="@saved.CoverUrl" Alt="@saved.Title" Class="session-card__img" ObjectFit="cover" />
+                                }
+                                else
+                                {
+                                    <div class="session-card__placeholder">
+                                        <K7Icon Icon="@Phosphor.MusicNotes" />
+                                    </div>
+                                }
+                            </div>
+                            <div class="session-card__body">
+                                <div class="session-card__heading">
+                                    <span class="session-card__title">@(string.IsNullOrWhiteSpace(saved.Title) ? L["Untitled"] : saved.Title)</span>
+                                    @if (SavedContext(saved) is { } savedContext)
+                                    {
+                                        <span class="session-card__artist">@savedContext</span>
+                                    }
+                                </div>
+                                <span class="session-card__device">
+                                    @if (IsThisDevice(saved.DeviceId))
+                                    {
+                                        <K7Chip Size="sm" Variant="outlined" Color="primary" Text="@L["ThisDevice"]" />
+                                    }
+                                    else
+                                    {
+                                        <K7Icon Icon="@Phosphor.Devices" IconSize="@K7IconSize.Sm" />
+                                        @saved.DeviceName
+                                    }
+                                </span>
+                                @if (saved.DurationSeconds is > 0)
+                                {
+                                    <div class="session-card__progress">
+                                        <K7ProgressBar Value="@SavedProgress(saved)" />
+                                        <div class="session-card__times">
+                                            <span>@FormatClock(saved.PositionSeconds)</span>
+                                            <span>@FormatClock(saved.DurationSeconds.Value)</span>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                            </div>
+                            <div class="session-card__actions">
+                                @if (CanOpenSavedMedia(saved))
+                                {
+                                    <K7Button Variant="text" Size="sm" StartIcon="@Phosphor.Info" OnClick="@(() => OpenSavedMediaAsync(saved))">@L["GoToMedia"]</K7Button>
+                                }
+                                <K7Button Variant="text" Size="sm" Color="error" StartIcon="@Phosphor.Trash" OnClick="@(() => DeleteSavedAsync(saved))">@L["Delete"]</K7Button>
+                                <K7Button Variant="filled" Size="sm" Color="primary" StartIcon="@Phosphor.Play" OnClick="@(() => ResumeSavedAsync(saved))">@L["Resume"]</K7Button>
+                            </div>
+                        </K7Paper>
+                    }
+                </div>
+            }
+        </section>
+    }
+</div>

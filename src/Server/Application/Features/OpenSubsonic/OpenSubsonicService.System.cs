@@ -55,7 +55,8 @@ public sealed partial class OpenSubsonicService
                 new() { Name = "songLyrics", Versions = [1] },
                 new() { Name = "formPost", Versions = [1] },
                 new() { Name = "playbackReport", Versions = [1] },
-                new() { Name = "transcodeOffset", Versions = [1] }
+                new() { Name = "transcodeOffset", Versions = [1] },
+                new() { Name = "playQueueByIndex", Versions = [1] }
             }
         });
 

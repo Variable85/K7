@@ -38,6 +38,8 @@ public class CustomNavPathTests
         };
 
         CustomNavPath.ShouldShowBar(layout, "/admin/navigation", DeviceType.Desktop).Should().BeTrue();
+        CustomNavPath.ShouldShowBar(layout, "/sessions", DeviceType.Desktop).Should().BeTrue();
+        CustomNavPath.ShouldShowBar(layout with { ShowOnPhone = true }, "/sessions", DeviceType.Phone).Should().BeFalse();
         CustomNavPath.ShouldShowBar(layout, "/admin/dashboard", DeviceType.Desktop).Should().BeTrue();
         CustomNavPath.ShouldShowBar(layout, "/admin/navigation", DeviceType.TV).Should().BeTrue();
         CustomNavPath.ShouldShowBar(layout with { ShowOnTv = false }, "/admin/navigation", DeviceType.TV).Should().BeFalse();

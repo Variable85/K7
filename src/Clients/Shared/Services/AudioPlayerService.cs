@@ -1,4 +1,5 @@
 using K7.Clients.Shared.Enums;
+using K7.Clients.Shared.Helpers;
 using K7.Clients.Shared.Interfaces;
 using K7.Clients.Shared.Models;
 using K7.Server.Domain.Enums;
@@ -76,6 +77,13 @@ public class AudioPlayerService(IStreamUriService streamUriService, IDeviceStora
             // After the UI has flipped to the incoming track, ignore late ticks from the
             // outgoing element. While UI is deferred, keep reporting the outgoing clock.
             if (_crossfadeTriggered && !_crossfadeUiDeferred && value > 1)
+                return;
+
+            // audioStop resets the element to 0. Keep the held clock until play.
+            if (_awaitingRestoredPlay
+                && _playbackState != PlaybackState.Playing
+                && value <= 1
+                && _restoredPosition > 1)
                 return;
 
             if (field == value) return;
@@ -175,13 +183,50 @@ public class AudioPlayerService(IStreamUriService streamUriService, IDeviceStora
     public Guid? ActivePlaylistId { get; private set; }
     public event Action? ActivePlaylistChanged;
     public event Action? ActiveRadioChanged;
+    public event Action? RestoredPlaybackStarted;
+    public bool IsAwaitingRestoredPlay => _awaitingRestoredPlay;
+    public bool IsQueueExhausted => _queueExhausted;
+
+    public MusicSessionSourceKind SessionSource { get; private set; }
+    public Guid? SessionSourceId { get; private set; }
+    public int ShuffleSeed { get; private set; }
+
+    private bool _preserveShuffleSeed;
+    private bool _awaitingRestoredPlay;
+    private bool _queueExhausted;
+    private double _restoredPosition;
+    private Guid? _restoredMediaId;
 
     private static readonly Random Rng = new();
 
     // Transport controls
-    public void Play() => PlayRequested?.Invoke();
+    public void Play()
+    {
+        _queueExhausted = false;
+        if (_awaitingRestoredPlay)
+        {
+            _ = LoadAndPlayCurrentAsync(CancellationToken.None);
+            return;
+        }
+
+        PlayRequested?.Invoke();
+    }
     public void Pause() => PauseRequested?.Invoke();
-    public void Seek(double time) => SeekRequested?.Invoke(time);
+    public void Seek(double time)
+    {
+        _queueExhausted = false;
+        if (_awaitingRestoredPlay)
+        {
+            _restoredPosition = Math.Max(0, time);
+            if (_restoredPosition <= 1)
+            {
+                _awaitingRestoredPlay = false;
+                _restoredMediaId = null;
+            }
+        }
+
+        SeekRequested?.Invoke(time);
+    }
 
     public void Mute()
     {
@@ -208,6 +253,21 @@ public class AudioPlayerService(IStreamUriService streamUriService, IDeviceStora
     {
         StopRequested?.Invoke();
         ForceIdle();
+    }
+
+    public void HoldResumePosition()
+    {
+        var track = CurrentTrack;
+        if (track is null || CurrentTime <= 1)
+        {
+            _awaitingRestoredPlay = false;
+            _restoredMediaId = null;
+            return;
+        }
+
+        _restoredMediaId = track.MediaId;
+        _restoredPosition = CurrentTime;
+        _awaitingRestoredPlay = true;
     }
 
     // Visibility
@@ -274,17 +334,30 @@ public class AudioPlayerService(IStreamUriService streamUriService, IDeviceStora
     {
         ClearRadioContext();
         ClearPlaylistContext();
+        ApplySessionSource(null, MusicSessionSourceKind.AdHoc, null);
         await LoadQueueAsync([track], 0, cancellationToken);
     }
 
-    public async Task PlayTracksAsync(IEnumerable<AudioQueueItem> tracks, int startIndex = 0, Guid? playlistId = null, CancellationToken cancellationToken = default)
+    public async Task PlayTracksAsync(
+        IEnumerable<AudioQueueItem> tracks,
+        int startIndex = 0,
+        Guid? playlistId = null,
+        MusicSessionSourceKind sourceKind = MusicSessionSourceKind.AdHoc,
+        Guid? sourceId = null,
+        CancellationToken cancellationToken = default)
     {
         ClearRadioContext();
         SetPlaylistContext(playlistId);
+        ApplySessionSource(playlistId, sourceKind, sourceId);
         await LoadQueueAsync(tracks, startIndex, cancellationToken);
     }
 
-    public async Task PlayShuffledAsync(IEnumerable<AudioQueueItem> tracks, Guid? playlistId = null, CancellationToken cancellationToken = default)
+    public async Task PlayShuffledAsync(
+        IEnumerable<AudioQueueItem> tracks,
+        Guid? playlistId = null,
+        MusicSessionSourceKind sourceKind = MusicSessionSourceKind.AdHoc,
+        Guid? sourceId = null,
+        CancellationToken cancellationToken = default)
     {
         var list = tracks as IList<AudioQueueItem> ?? tracks.ToList();
         if (list.Count == 0)
@@ -299,19 +372,37 @@ public class AudioPlayerService(IStreamUriService streamUriService, IDeviceStora
         var startIndex = Rng.Next(list.Count);
         ClearRadioContext();
         SetPlaylistContext(playlistId);
+        ApplySessionSource(playlistId, sourceKind, sourceId);
         await LoadQueueAsync(list, startIndex, cancellationToken);
     }
 
     public async Task PlayRadioAsync(IEnumerable<AudioQueueItem> tracks, string radioTitle, int startIndex = 0, CancellationToken cancellationToken = default)
     {
         ClearPlaylistContext();
+        ApplySessionSource(null, MusicSessionSourceKind.AdHoc, null);
         ActiveRadioTitle = radioTitle;
         ActiveRadioChanged?.Invoke();
         await LoadQueueAsync(tracks, startIndex, cancellationToken);
     }
 
+    private void ApplySessionSource(Guid? playlistId, MusicSessionSourceKind sourceKind, Guid? sourceId)
+    {
+        if (playlistId is Guid pid)
+        {
+            SessionSource = MusicSessionSourceKind.Playlist;
+            SessionSourceId = pid;
+            return;
+        }
+
+        SessionSource = sourceKind;
+        SessionSourceId = sourceKind == MusicSessionSourceKind.AdHoc ? null : sourceId;
+    }
+
     private async Task LoadQueueAsync(IEnumerable<AudioQueueItem> tracks, int startIndex, CancellationToken cancellationToken)
     {
+        _awaitingRestoredPlay = false;
+        _restoredMediaId = null;
+        _queueExhausted = false;
         _queue.Clear();
         _queue.AddRange(tracks);
         _playHistory.Clear();
@@ -416,6 +507,11 @@ public class AudioPlayerService(IStreamUriService streamUriService, IDeviceStora
     public void ClearQueue()
     {
         ClearPlaylistContext();
+        ClearRadioContext();
+        ApplySessionSource(null, MusicSessionSourceKind.AdHoc, null);
+        _awaitingRestoredPlay = false;
+        _restoredMediaId = null;
+        _queueExhausted = false;
         _queue.Clear();
         _playHistory.Clear();
         _shuffleOrder.Clear();
@@ -423,6 +519,95 @@ public class AudioPlayerService(IStreamUriService streamUriService, IDeviceStora
         _shufflePosition = -1;
         QueueChanged?.Invoke();
         CurrentTrackChanged?.Invoke(null);
+    }
+
+    public void RestorePaused(MusicSessionSnapshotDto snapshot, bool replace = false)
+    {
+        if (snapshot.Items.Count == 0)
+            return;
+
+        if (!replace && _queue.Count > 0)
+            return;
+
+        _queueExhausted = false;
+
+        if (replace)
+        {
+            Stop();
+            if (snapshot.SourceKind != MusicSessionSourceKind.Radio)
+                ClearRadioContext();
+            ClearPlaylistContext();
+        }
+
+        var items = snapshot.Items.Select(MusicSessionMapper.ToQueueItem).ToList();
+        var index = snapshot.CurrentIndex;
+        if (index < 0 || index >= items.Count || items[index].MediaId != snapshot.CurrentMediaId)
+            index = items.FindIndex(t => t.MediaId == snapshot.CurrentMediaId);
+        if (index < 0)
+            index = 0;
+
+        _queue.Clear();
+        _queue.AddRange(items);
+        CurrentIndex = index;
+        Repeat = Enum.IsDefined(typeof(RepeatMode), snapshot.RepeatMode)
+            ? (RepeatMode)snapshot.RepeatMode
+            : RepeatMode.Off;
+        Shuffle = snapshot.Shuffle;
+        ShuffleSeed = snapshot.ShuffleSeed;
+        _preserveShuffleSeed = true;
+        RebuildShuffleOrder();
+        ApplySessionSource(
+            snapshot.SourceKind == MusicSessionSourceKind.Playlist ? snapshot.SourceId : null,
+            snapshot.SourceKind,
+            snapshot.SourceId);
+        if (snapshot.SourceKind == MusicSessionSourceKind.Playlist)
+            SetPlaylistContext(snapshot.SourceId);
+        if (snapshot.SourceKind == MusicSessionSourceKind.Radio)
+        {
+            ActiveRadioTitle = snapshot.Radio?.Title;
+            ActiveRadioChanged?.Invoke();
+        }
+
+        _restoredPosition = Math.Max(0, snapshot.PositionSeconds);
+        _restoredMediaId = snapshot.CurrentMediaId;
+        _awaitingRestoredPlay = true;
+        Duration = CurrentTrack?.Duration ?? 0;
+        CurrentTime = _restoredPosition;
+        _playbackState = PlaybackState.Paused;
+        PlaybackStateChanged?.Invoke(_playbackState);
+        IsVisible = true;
+        IsVisibleChanged?.Invoke();
+        QueueChanged?.Invoke();
+        CurrentTrackChanged?.Invoke(CurrentTrack);
+    }
+
+    public void ReplaceQueueFromSource(IReadOnlyList<AudioQueueItem> tracks, Guid currentMediaId, bool shuffle, int shuffleSeed)
+    {
+        if (tracks.Count == 0)
+            return;
+
+        var index = 0;
+        for (var i = 0; i < tracks.Count; i++)
+        {
+            if (tracks[i].MediaId == currentMediaId)
+            {
+                index = i;
+                break;
+            }
+        }
+
+        var position = CurrentTime;
+        _queue.Clear();
+        _queue.AddRange(tracks);
+        CurrentIndex = index;
+        Shuffle = shuffle;
+        ShuffleSeed = shuffleSeed;
+        _preserveShuffleSeed = true;
+        RebuildShuffleOrder();
+        if (_shuffleOrder.Count > 0)
+            _shufflePosition = _shuffleOrder.IndexOf(CurrentIndex);
+        CurrentTime = position;
+        QueueChanged?.Invoke();
     }
 
     // Navigation
@@ -445,9 +630,12 @@ public class AudioPlayerService(IStreamUriService streamUriService, IDeviceStora
         var nextIndex = GetNextIndex();
         if (nextIndex is null)
         {
+            _queueExhausted = true;
             PlaybackState = PlaybackState.Ended;
             return;
         }
+
+        _queueExhausted = false;
 
         PushCurrentToPlayHistory();
         CurrentIndex = nextIndex.Value;
@@ -534,6 +722,8 @@ public class AudioPlayerService(IStreamUriService streamUriService, IDeviceStora
             return;
 
         Repeat = mode;
+        if (mode is RepeatMode.All or RepeatMode.One)
+            _queueExhausted = false;
         RepeatModeChanged?.Invoke(Repeat);
     }
 
@@ -956,6 +1146,14 @@ public class AudioPlayerService(IStreamUriService streamUriService, IDeviceStora
         var track = CurrentTrack;
         if (track is null) return;
 
+        var sameTrack = _restoredMediaId is null || track.MediaId == _restoredMediaId;
+        var resumeAt = _awaitingRestoredPlay && sameTrack && _restoredPosition > 1
+            ? _restoredPosition
+            : (double?)null;
+        var restored = _awaitingRestoredPlay;
+        _awaitingRestoredPlay = false;
+        _queueExhausted = false;
+
         var epoch = ++_loadEpoch;
 
         // Keep the gapless/crossfade URL so native players can promote the already
@@ -1029,7 +1227,12 @@ public class AudioPlayerService(IStreamUriService streamUriService, IDeviceStora
         if (epoch != _loadEpoch)
             return;
 
+        if (resumeAt is not null)
+            source.PendingSeekTime = resumeAt;
+
         SourceChanged?.Invoke(source);
+        if (restored)
+            RestoredPlaybackStarted?.Invoke();
     }
 
     private static PlayerSource CreateTrackSource(
@@ -1123,10 +1326,24 @@ public class AudioPlayerService(IStreamUriService streamUriService, IDeviceStora
                 indices.Add(i);
         }
 
+        Random rng;
+        if (Shuffle)
+        {
+            if (!_preserveShuffleSeed)
+                ShuffleSeed = Random.Shared.Next();
+            rng = new Random(ShuffleSeed);
+        }
+        else
+        {
+            rng = Rng;
+        }
+
+        _preserveShuffleSeed = false;
+
         // Fisher-Yates shuffle
         for (var i = indices.Count - 1; i > 0; i--)
         {
-            var j = Rng.Next(i + 1);
+            var j = rng.Next(i + 1);
             (indices[i], indices[j]) = (indices[j], indices[i]);
         }
 

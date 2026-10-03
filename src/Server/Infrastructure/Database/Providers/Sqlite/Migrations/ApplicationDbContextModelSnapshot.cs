@@ -2316,6 +2316,78 @@ namespace K7.Server.Infrastructure.Database.Providers.Sqlite.Migrations
                     b.ToTable("ClientAppPasswords");
                 });
 
+            modelBuilder.Entity("K7.Server.Domain.Entities.Users.DeviceMusicSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("CurrentIndex")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("CurrentIndexedFileId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CurrentMediaId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ItemsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<double>("PositionSeconds")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("RadioJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("RepeatMode")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("SharedProfileId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Shuffle")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ShuffleSeed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("SourceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SourceKind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("UpdatedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeviceId");
+
+                    b.HasIndex("SharedProfileId");
+
+                    b.HasIndex("UserId", "DeviceId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_DeviceMusicSessions_User_Device_Personal")
+                        .HasFilter("\"SharedProfileId\" IS NULL");
+
+                    b.HasIndex("UserId", "DeviceId", "SharedProfileId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_DeviceMusicSessions_User_Device_Profile")
+                        .HasFilter("\"SharedProfileId\" IS NOT NULL");
+
+                    b.ToTable("DeviceMusicSessions");
+                });
+
             modelBuilder.Entity("K7.Server.Domain.Entities.Users.MediaPlaybackSession", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4697,6 +4769,32 @@ namespace K7.Server.Infrastructure.Database.Providers.Sqlite.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("K7.Server.Domain.Entities.Users.DeviceMusicSession", b =>
+                {
+                    b.HasOne("K7.Server.Domain.Entities.Devices.Device", "Device")
+                        .WithMany()
+                        .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("K7.Server.Domain.Entities.Users.SharedProfile", "SharedProfile")
+                        .WithMany()
+                        .HasForeignKey("SharedProfileId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("K7.Server.Domain.Entities.Users.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Device");
+
+                    b.Navigation("SharedProfile");
 
                     b.Navigation("User");
                 });

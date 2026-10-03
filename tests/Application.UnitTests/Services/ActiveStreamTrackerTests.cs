@@ -245,6 +245,61 @@ public class ActiveStreamTrackerTests
     }
 
     [Test]
+    public void Upsert_ShouldReplaceOtherMedia_WhenTheSameDeviceStartsSomethingElse()
+    {
+        var tracker = new ActiveStreamTracker();
+        var userId = Guid.NewGuid();
+        var deviceId = Guid.NewGuid();
+        var movieSession = Guid.NewGuid();
+        var musicSession = Guid.NewGuid();
+
+        tracker.Upsert(movieSession, CreateStream(movieSession, userId, Guid.NewGuid(), deviceId, "Browser"));
+        tracker.Upsert(musicSession, CreateStream(musicSession, userId, Guid.NewGuid(), deviceId, "Browser"));
+
+        var active = tracker.GetActiveStreams();
+        active.Should().ContainSingle(s => s.SessionId == musicSession);
+        tracker.GetStreamInfo(movieSession).Should().BeNull();
+    }
+
+    [Test]
+    public void ReleaseTakenOver_ShouldDropTheMediaOnEveryDeviceExceptTheOneThatResumed()
+    {
+        var tracker = new ActiveStreamTracker();
+        var userId = Guid.NewGuid();
+        var mediaId = Guid.NewGuid();
+        var stolenDevice = Guid.NewGuid();
+        var resumedDevice = Guid.NewGuid();
+        var otherDevice = Guid.NewGuid();
+        var otherMedia = Guid.NewGuid();
+
+        tracker.Upsert(Guid.NewGuid(), CreateStream(Guid.NewGuid(), userId, mediaId, stolenDevice, "Phone"));
+        tracker.Upsert(Guid.NewGuid(), CreateStream(Guid.NewGuid(), userId, mediaId, resumedDevice, "Browser"));
+        tracker.Upsert(Guid.NewGuid(), CreateStream(Guid.NewGuid(), userId, otherMedia, otherDevice, "TV"));
+
+        var released = tracker.ReleaseTakenOver("user-1", mediaId, null, resumedDevice);
+
+        released.Should().Equal(stolenDevice);
+        tracker.GetActiveStreams().Select(s => s.DeviceId).Should().BeEquivalentTo([resumedDevice, otherDevice]);
+    }
+
+    [Test]
+    public void ReleaseDevice_ShouldDropOnlyThatDevice()
+    {
+        var tracker = new ActiveStreamTracker();
+        var userId = Guid.NewGuid();
+        var closedDevice = Guid.NewGuid();
+        var otherDevice = Guid.NewGuid();
+
+        tracker.Upsert(Guid.NewGuid(), CreateStream(Guid.NewGuid(), userId, Guid.NewGuid(), closedDevice, "Windows"));
+        tracker.Upsert(Guid.NewGuid(), CreateStream(Guid.NewGuid(), userId, Guid.NewGuid(), otherDevice, "Phone"));
+
+        var identities = tracker.ReleaseDevice(closedDevice);
+
+        identities.Should().Equal("user-1");
+        tracker.GetActiveStreams().Select(s => s.DeviceId).Should().BeEquivalentTo([otherDevice]);
+    }
+
+    [Test]
     public void Upsert_ShouldKeepIndexedFileId_WhenLaterUpdateOmitsIt()
     {
         var tracker = new ActiveStreamTracker();

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+              <xsd:attribute name="xml:space" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <data name="PageTitle" xml:space="preserve"><value>Sessions</value></data>
+  <data name="Live" xml:space="preserve"><value>Médias en cours de lecture</value></data>
+  <data name="Saved" xml:space="preserve"><value>Sessions musicales enregistrées</value></data>
+  <data name="EmptyLive" xml:space="preserve"><value>Aucune lecture en cours</value></data>
+  <data name="EmptySaved" xml:space="preserve"><value>Aucune session musicale enregistrée</value></data>
+  <data name="ThisDevice" xml:space="preserve"><value>Ce périphérique</value></data>
+  <data name="Loading" xml:space="preserve"><value>Chargement...</value></data>
+  <data name="Untitled" xml:space="preserve"><value>Sans titre</value></data>
+  <data name="Resume" xml:space="preserve"><value>Reprendre</value></data>
+  <data name="ResumeHere" xml:space="preserve"><value>Reprendre ici</value></data>
+  <data name="RemoteControl" xml:space="preserve"><value>Télécommande</value></data>
+  <data name="GoToMedia" xml:space="preserve"><value>Voir le média</value></data>
+  <data name="Delete" xml:space="preserve"><value>Supprimer</value></data>
+</root>

@@ -45,9 +45,12 @@ public sealed class SyncPlayMediaLoader : ISyncPlayMediaLoader
 
         if (media is MusicTrackDto musicTrack)
         {
-            // Stop video player when switching to audio
             if (_videoPlayer.IsVisible)
+            {
+                _progressTracker.StopTracking();
+                _videoPlayer.Pause();
                 await _videoPlayer.HideAsync();
+            }
 
             var queueItem = new AudioQueueItem
             {

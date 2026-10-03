@@ -18,4 +18,9 @@ public sealed record AudioPlayerSettingsDto
     public bool KeepScreenOn { get; set; }
     public int SkipBackSeconds { get; set; } = 5;
     public int SkipForwardSeconds { get; set; } = 5;
+
+    /// <summary>
+    /// Null means the stored JSON predates the setting and should remember the session.
+    /// </summary>
+    public bool? RememberMusicSession { get; set; }
 }

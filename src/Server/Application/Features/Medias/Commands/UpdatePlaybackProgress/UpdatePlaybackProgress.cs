@@ -452,14 +452,34 @@ public class UpdatePlaybackProgressCommandHandler(
             Guid? parentId = null;
             int? seasonNumber = null;
             int? episodeNumber = null;
+            string? artist = null;
+            string? albumTitle = null;
+            string? seriesTitle = null;
             if (media is MusicTrack track)
             {
                 parentId = track.AlbumId;
+                var labels = await _context.Medias.OfType<MusicTrack>()
+                    .AsNoTracking()
+                    .Where(t => t.Id == track.Id)
+                    .Select(t => new
+                    {
+                        Artist = t.Artist != null
+                            ? t.Artist.Title
+                            : t.Album.Artist != null ? t.Album.Artist.Title : null,
+                        Album = t.Album.Title
+                    })
+                    .FirstOrDefaultAsync(cancellationToken);
+                artist = labels?.Artist;
+                albumTitle = labels?.Album;
             }
             else if (media is SerieEpisode ep)
             {
                 parentId = ep.SerieId;
                 episodeNumber = ep.EpisodeNumber;
+                seriesTitle = await _context.Medias
+                    .Where(m => m.Id == ep.SerieId)
+                    .Select(m => m.Title)
+                    .FirstOrDefaultAsync(cancellationToken);
                 seasonNumber = ep.Season?.SeasonNumber
                     ?? await _context.Medias.OfType<SerieSeason>()
                         .Where(s => s.Id == ep.SeasonId)
@@ -475,6 +495,9 @@ public class UpdatePlaybackProgressCommandHandler(
                 UserName = userName,
                 MediaId = request.MediaId,
                 MediaTitle = media.Title,
+                Artist = artist,
+                AlbumTitle = albumTitle,
+                SeriesTitle = seriesTitle,
                 MediaType = media.Type.ToString(),
                 ParentId = parentId,
                 IndexedFileId = request.IndexedFileId,
