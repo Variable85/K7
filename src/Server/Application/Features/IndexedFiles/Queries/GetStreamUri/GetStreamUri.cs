@@ -311,18 +311,19 @@ public class GetStreamUriQueryHandler(
     }
 
     /// <summary>
-    /// Native clients can switch muxed tracks (LibVLC on Android/Windows, AVPlayer on
+    /// Native clients can switch muxed tracks (LibVLC on Android/Windows/Linux, AVPlayer on
     /// iOS/Mac). Web Video.js cannot.
     /// </summary>
     internal static bool AllowsVideoDirectPlay(Device device) =>
         device.ClientType == ClientType.Native;
 
     /// <summary>
-    /// HLS master is consumed by Video.js/VHS (Web WASM and Windows MAUI HLS fallback).
+    /// HLS master is consumed by Video.js/VHS (Web WASM, Windows MAUI HLS fallback, Linux MAUI).
     /// </summary>
     internal static bool UsesVideoJsHlsManifest(Device device) =>
         device.ClientType == ClientType.Web
-        || device.OperatingSystem == OperatingSystem.Windows;
+        || device.OperatingSystem == OperatingSystem.Windows
+        || device.OperatingSystem == OperatingSystem.Linux;
 
     /// <summary>
     /// Native Windows HLS cannot remux: Video.js in WebView2 is the fallback after

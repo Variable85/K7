@@ -1,4 +1,4 @@
-using K7.Clients.MAUI.Platforms.Windows;
+using K7.Clients.MAUI.Playback;
 
 namespace K7.Clients.MAUI.SmokeTests;
 

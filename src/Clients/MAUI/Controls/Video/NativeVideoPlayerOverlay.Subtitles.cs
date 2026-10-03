@@ -12,7 +12,7 @@ public sealed partial class NativeVideoPlayerOverlay
 {
     private readonly Label _sidecarSubtitleLabel = new();
     private IReadOnlyList<WebVttCue> _sidecarCues = [];
-#if WINDOWS
+#if WINDOWS || LINUX
     private Guid? _sidecarFileId;
     private int? _sidecarTrackIndex;
 #endif
@@ -60,7 +60,12 @@ public sealed partial class NativeVideoPlayerOverlay
             return;
 
         DetachSidecarLayer();
+#if LINUX
+        // GTK paints RootGrid children in MAUI ZIndex order: stay above the overlay (5).
+        _sidecarSubtitleLabel.ZIndex = 6;
+#else
         _sidecarSubtitleLabel.ZIndex = 3;
+#endif
         host.Children.Add(_sidecarSubtitleLabel);
 #endif
     }
@@ -79,7 +84,7 @@ public sealed partial class NativeVideoPlayerOverlay
 #if ANDROID
         // ExoPlayer SubtitleView owns text cues; do not load XAML VTT sidecar.
         ClearSidecarSubtitles();
-#elif WINDOWS
+#elif WINDOWS || LINUX
         if (!IsVisible)
             return;
 
@@ -106,7 +111,7 @@ public sealed partial class NativeVideoPlayerOverlay
         _sidecarLoadCts?.Cancel();
         _sidecarLoadCts = null;
         _sidecarCues = [];
-#if WINDOWS
+#if WINDOWS || LINUX
         _sidecarFileId = null;
         _sidecarTrackIndex = null;
 #endif
@@ -116,7 +121,7 @@ public sealed partial class NativeVideoPlayerOverlay
 #if WINDOWS
         CloseWindowsSubtitlePopup();
 #endif
-#if ANDROID || WINDOWS
+#if ANDROID || WINDOWS || LINUX
         FindBlazorPage()?.ReleaseSidecarTextSubtitles();
 #endif
     }
@@ -160,6 +165,11 @@ public sealed partial class NativeVideoPlayerOverlay
     {
         var settings = _videoSettings ?? _player.VideoPlayerUxSettings ?? new VideoPlayerSettingsDto();
         var size = SubtitleStyleHelper.ToFontSizePx(settings.SubtitleFontSize, _deviceType);
+#if LINUX
+        // Device-independent px scaled like the other clients do (GTK scale stays 1 under WSLg),
+        // capped: subtitles grow faster than the chrome glyphs to the eye.
+        size = (int)Math.Round(size * Math.Min(Platforms.Linux.LinuxUiScale.Factor, 1.25));
+#endif
         _sidecarSubtitleLabel.FontSize = size;
         _sidecarSubtitleLabel.FontFamily = ToMauiSubtitleFontFamily(settings.SubtitleFontFamily);
 
@@ -194,7 +204,7 @@ public sealed partial class NativeVideoPlayerOverlay
 #endif
     }
 
-#if WINDOWS
+#if WINDOWS || LINUX
     private async Task LoadSidecarSubtitlesAsync(Guid fileId, SubtitleFileTrackDto track)
     {
         _sidecarLoadCts?.Cancel();

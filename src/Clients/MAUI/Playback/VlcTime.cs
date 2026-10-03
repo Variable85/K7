@@ -1,4 +1,4 @@
-#if ANDROID || WINDOWS
+#if ANDROID || WINDOWS || LINUX
 namespace K7.Clients.MAUI.Playback;
 
 /// <summary>

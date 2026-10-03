@@ -172,6 +172,11 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider, IC
                 // OIDC display=page: server swaps the k7:// 302 for /auth/complete
                 // so the system browser is not left on /sign-in.
                 authorizeParameters["display"] = "page";
+#elif LINUX
+                // Only with the custom scheme: the loopback 302 must reach the listener directly.
+                if (K7.Clients.MAUI.Linux.LinuxAuthRedirect.UsesCustomScheme(
+                        Environment.GetEnvironmentVariable(K7.Clients.MAUI.Linux.LinuxAuthRedirect.EnvironmentVariable)))
+                    authorizeParameters["display"] = "page";
 #endif
                 var challenge = await _openIddictClientService.ChallengeInteractivelyAsync(new()
                 {

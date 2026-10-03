@@ -9,6 +9,8 @@
    - `K7-{version}-android.apk` - sideload / Android TV
    - `K7-{version}-win-x64.zip` - self-contained unpackaged Windows. Extract the whole folder and run `K7.exe` (needs matching `K7.pri` sidecars, not a single-file exe). Requires WebView2 Runtime and a recent Windows App Runtime on the machine.
    - `K7-{version}-ios-sideload.ipa` - ad-hoc-signed iOS client for AltStore / SideStore / Sideloadly, plus AltStore source `apps.json`
+   - `K7-{version}-linux-x64.deb` - Debian / Ubuntu package (`sudo apt install ./K7-...-linux-x64.deb`). Self-contained .NET. GTK4, WebKitGTK and GStreamer are resolved by apt. libvlc 4 is bundled (`/usr/lib/k7/libvlc/linux-x64`, see [Linux libvlc bundle](#linux-libvlc-bundle)). Installs `/usr/bin/k7`, the desktop entry and the `k7://` scheme handler.
+   - `K7-{version}-linux-x64.tar.gz` - same publish output for other distros (needs GTK 4.12+, WebKitGTK 6.0, PulseAudio or PipeWire, and the GStreamer plugins). Run `./k7` from the extracted folder.
 5. Maintainers **publish the draft** (human / non-`GITHUB_TOKEN`). That triggers **sync-version** and **docker-release**.
 6. **sync-version** rewrites `<Version>` in `Directory.Build.props` to match the tag and commits `chore: sync version to ...`.
 7. **docker-release** builds and pushes `ghcr.io/kaybi-gh/k7` and `ghcr.io/kaybi-gh/k7-import` with semver tags and `latest`, passing `APP_VERSION` as a Docker build-arg.
@@ -21,7 +23,7 @@ gh release create vX.Y.Z --draft --target main --title "K7 vX.Y.Z" --notes-file 
 # Editing a draft does not re-run clients. Drafter-created drafts also do not
 # auto-start other workflows (GITHUB_TOKEN). Start clients once:
 gh workflow run client-release.yml -f tag=vX.Y.Z
-# After APK, Windows zip, and iOS IPA appear on the draft:
+# After APK, Windows zip, Linux deb / tarball, and iOS IPA appear on the draft:
 gh release edit vX.Y.Z --draft=false
 ```
 
@@ -54,6 +56,18 @@ Client assets land on the draft; publishing the draft triggers **docker-release*
 | Android | Release asset `K7-{version}-android.apk` |
 | Windows | Release asset `K7-{version}-win-x64.zip` |
 | iOS | Release assets `K7-{version}-ios-sideload.ipa`, `apps.json` |
+| Linux | Release assets `K7-{version}-linux-x64.deb`, `K7-{version}-linux-x64.tar.gz` |
+
+### Linux libvlc bundle
+
+Windows ships libvlc 4 through the `VideoLAN.LibVLC.Windows` NuGet (copied to `libvlc/win-x64`). No such package exists for Linux, and distros only ship VLC 3, so the Linux job builds the bundle itself with [`tools/linux/bundle-libvlc.sh`](../../tools/linux/bundle-libvlc.sh):
+
+1. Downloads the VideoLAN `vlc` snap from its edge channel (nightly VLC 4, base core24), pinned by revision and SHA-256 (`VLC_SNAP_REVISION` / `VLC_SNAP_SHA256` at the top of the script).
+2. Extracts `libvlc.so.12`, `libvlccore.so.9`, `libvlc_pulse` and the plugin subset K7 uses (file and HTTP input, demuxers, avcodec and the other decoders, packetizers, audio filters and mixers, Pulse output, software chroma converters, deinterlace and scale filters, the vmem video output). Encoders, hardware decoders, subtitle renderers and network protocols K7 never plays through libvlc are dropped.
+3. The snap links those plugins against Ubuntu 24.04 libraries it does not contain (ffmpeg 6.1, dav1d, libmatroska, libva). The script resolves them with `ldd` on the runner (`vlc-plugin-base` is installed as a dependency magnet) and copies them to `lib/`. Libraries every GTK4 / WebKitGTK desktop already has stay on the host and are listed in `DebDepends` in the csproj.
+4. Writes `BUNDLE.txt` (VLC version, plugins, private and host libraries) and fails if anything is left unresolved.
+
+The output lands in `src/Clients/MAUI/libvlc/linux-x64` (gitignored). `K7CopyLibVlcLinuxNatives` / `K7PublishLibVlcLinuxNatives` copy it next to the app. At run time `LinuxLibVlcBundle` finds it (or `K7_LIBVLC_DIR`) and `LinuxVlcVideoPlayer` loads the private libraries and libvlccore by full path before libvlc, then sets `VLC_PLUGIN_PATH`. Without the directory the client still runs and uses a system VLC 4 when there is one.
 
 ### Android signing
 

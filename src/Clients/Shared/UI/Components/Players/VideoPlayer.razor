@@ -26,8 +26,11 @@ else if (PlayerService.IsVisible)
         && WindowsVideoPlayback.ShouldUseWebVideoPlayer(
             PlayerService.Source?.MimeType,
             PlayerService.Source?.Url ?? SourceUri);
-    // Windows keeps native XAML chrome for both LibVLC and Video.js HLS.
-    var nativeChrome = MauiNativeVideoChrome.IsEnabled && isNative;
+    // Windows and Linux keep native chrome for both LibVLC and Video.js HLS.
+    var nativeChrome = isNative
+        && MauiNativeVideoChrome.IsEnabledFor(
+            PlayerService.Source?.MimeType,
+            PlayerService.Source?.Url ?? SourceUri);
 
     if (nativeChrome && !usesWebVideoOnNative)
     {

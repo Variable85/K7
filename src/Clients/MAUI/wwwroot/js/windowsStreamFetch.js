@@ -476,6 +476,18 @@
         if (!K7._windowsStreamFetchRef)
             throw new Error('Windows stream fetch bridge not ready');
 
+        // GTK (WebKitGTK / GStreamer): blob: audio fails to parse; stream from the loopback
+        // auth proxy instead (Range-capable), HLS audio keeps the blob path.
+        if (window.K7_LINUX_GTK && !isHlsAudioUrl(url, mimeType)) {
+            try {
+                const local = await K7._windowsStreamFetchRef.invokeMethodAsync('GetLocalStreamUrlAsync', url);
+                if (local)
+                    return local;
+            } catch (e) {
+                console.warn('local stream proxy unavailable, falling back to blob', e);
+            }
+        }
+
         const result = await fetchStreamResult(url);
         const contentType = (result.contentType || '').toLowerCase();
         const bodyText = typeof result.body === 'string' ? result.body : '';

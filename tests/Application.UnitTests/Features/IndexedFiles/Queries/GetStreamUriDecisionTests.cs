@@ -624,6 +624,7 @@ public class GetStreamUriDecisionTests
     [TestCase(ClientType.Native, OperatingSystem.iOS, true)]
     [TestCase(ClientType.Native, OperatingSystem.MacCatalyst, true)]
     [TestCase(ClientType.Native, OperatingSystem.Windows, true)]
+    [TestCase(ClientType.Native, OperatingSystem.Linux, true)]
     [TestCase(ClientType.Web, OperatingSystem.Unknown, false)]
     [TestCase(ClientType.Web, OperatingSystem.Windows, false)]
     public void AllowsVideoDirectPlay_ShouldAllowNativeClients(
@@ -635,8 +636,23 @@ public class GetStreamUriDecisionTests
         GetStreamUriQueryHandler.AllowsVideoDirectPlay(device).Should().Be(expected);
     }
 
+    [TestCase(ClientType.Web, OperatingSystem.Unknown, true)]
+    [TestCase(ClientType.Native, OperatingSystem.Windows, true)]
+    [TestCase(ClientType.Native, OperatingSystem.Linux, true)]
+    [TestCase(ClientType.Native, OperatingSystem.Android, false)]
+    [TestCase(ClientType.Native, OperatingSystem.iOS, false)]
+    public void UsesVideoJsHlsManifest_ShouldApplyToWebAndDesktopWebViewHosts(
+        ClientType clientType,
+        OperatingSystem operatingSystem,
+        bool expected)
+    {
+        var device = CreateDevice(["video-mp4-aac-h264"], clientType, operatingSystem);
+        GetStreamUriQueryHandler.UsesVideoJsHlsManifest(device).Should().Be(expected);
+    }
+
     [TestCase(ClientType.Native, OperatingSystem.Windows, true)]
     [TestCase(ClientType.Native, OperatingSystem.Android, false)]
+    [TestCase(ClientType.Native, OperatingSystem.Linux, false)]
     [TestCase(ClientType.Web, OperatingSystem.Windows, false)]
     [TestCase(ClientType.Web, OperatingSystem.Unknown, false)]
     public void ForcesWindowsHlsEncode_ShouldOnlyApplyToNativeWindows(

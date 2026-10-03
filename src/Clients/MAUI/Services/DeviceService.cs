@@ -19,6 +19,9 @@ public class DeviceService(ICodecService codecHelper, IDeviceIdService deviceIdS
     private Task<CreateDeviceRequest>? _cachedCreateRequest;
     private Task<List<MediaFormatDto>>? _cachedSupportedFormats;
 
+    // maui-labs GTK4 Essentials report DevicePlatform.Create("Linux") (no built-in constant).
+    private static readonly DevicePlatform LinuxDevicePlatform = DevicePlatform.Create("Linux");
+
     public DeviceType? CachedDeviceType => _cachedDeviceType;
 
     public Task<CreateDeviceRequest> GenerateCreateDeviceRequestAsync()
@@ -182,6 +185,13 @@ public class DeviceService(ICodecService codecHelper, IDeviceIdService deviceIdS
         {
         }
 
+#if LINUX
+        // HLS transcodes play in WebKitGTK (GStreamer), which stalls on multichannel AAC
+        // ("Invalid channel positions"). The token only caps transcoded audio; Direct Play
+        // through LibVLC keeps the original 5.1 / 7.1 tracks.
+        ids.Add(K7.Server.Domain.Common.AudioOutputChannelTokens.MaxChannels(2));
+#endif
+
         return ids;
     }
 
@@ -261,6 +271,7 @@ public class DeviceService(ICodecService codecHelper, IDeviceIdService deviceIdS
             var platform when platform.Equals(DevicePlatform.iOS) => OperatingSystem.iOS,
             var platform when platform.Equals(DevicePlatform.MacCatalyst) => OperatingSystem.MacCatalyst,
             var platform when platform.Equals(DevicePlatform.WinUI) => OperatingSystem.Windows,
+            var platform when platform.Equals(LinuxDevicePlatform) => OperatingSystem.Linux,
             var platform when platform.Equals(DevicePlatform.macOS) => OperatingSystem.Unknown,
             var platform when platform.Equals(DevicePlatform.Tizen) => OperatingSystem.Unknown,
             var platform when platform.Equals(DevicePlatform.tvOS) => OperatingSystem.Unknown,
@@ -278,6 +289,7 @@ public class DeviceService(ICodecService codecHelper, IDeviceIdService deviceIdS
             OperatingSystem.Android => "Android",
             OperatingSystem.iOS => "iOS",
             OperatingSystem.MacCatalyst => "macOS",
+            OperatingSystem.Linux => "Linux",
             _ => "App"
         };
         return $"{client} ({platform})";

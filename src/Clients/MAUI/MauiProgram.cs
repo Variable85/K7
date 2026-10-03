@@ -28,6 +28,12 @@ using K7.Clients.MAUI.Platforms.Windows;
 #if WINDOWS
 using LibVLCSharp.MAUI;
 #endif
+#if LINUX
+using K7.Clients.MAUI.Platforms.Linux;
+using Microsoft.Maui.Platforms.Linux.Gtk4.BlazorWebView;
+using Microsoft.Maui.Platforms.Linux.Gtk4.Essentials.Hosting;
+using Microsoft.Maui.Platforms.Linux.Gtk4.Hosting;
+#endif
 
 namespace K7.Clients.MAUI;
 
@@ -35,6 +41,11 @@ public static partial class MauiProgram
 {
     public static MauiApp CreateMauiApp()
     {
+#if LINUX
+        // Static Essentials (Preferences, FileSystem, DeviceInfo) must work before DI exists.
+        LinuxEssentialsDefaults.ApplyEarly();
+#endif
+        // Native chrome over LibVLC Direct Play and Video.js HLS (Windows and Linux alike).
         MauiNativeVideoChrome.EnableForNativeMediaElementHosts();
 
 #if WINDOWS
@@ -47,9 +58,16 @@ public static partial class MauiProgram
 
         var builder = MauiApp.CreateBuilder();
         builder
+#if LINUX
+            // GTK4 backend + labs Essentials. MediaElement / SkiaSharp have no GTK handlers:
+            // video and music play inside WebKitGTK (Video.js / audioplayer.js).
+            .UseMauiAppLinuxGtk4<App>()
+            .AddLinuxGtk4Essentials()
+#else
             .UseMauiApp<App>()
             .UseSkiaSharp()
             .UseMauiCommunityToolkitMediaElement(isAndroidForegroundServiceEnabled: false)
+#endif
 #if WINDOWS
             .UseLibVLCSharp()
 #endif
@@ -59,7 +77,12 @@ public static partial class MauiProgram
                 fonts.AddFont("Phosphor.ttf", "Phosphor");
             });
 
+#if LINUX
+        builder.Services.AddBlazorWebView();
+        builder.Services.AddLinuxGtk4BlazorWebView();
+#else
         builder.Services.AddMauiBlazorWebView();
+#endif
 
         builder.Services.AddSingleton<AuthSessionKeeper>();
         builder.ConfigureLifecycleEvents(events =>
@@ -106,6 +129,18 @@ public static partial class MauiProgram
                         services.GetService<AuthSessionKeeper>()?.OnAppResumed();
                 });
             });
+#elif LINUX
+            events.AddGtk(gtk =>
+            {
+                // Services exist here (IPlatformApplication.Current.Services). The remaining
+                // static Essentials defaults and the k7:// listener need them.
+                gtk.OnMauiApplicationCreated(_ =>
+                {
+                    if (IPlatformApplication.Current?.Services is { } services)
+                        LinuxEssentialsDefaults.ApplyFromServices(services);
+                    LinuxProtocolActivation.Attach();
+                });
+            });
 #endif
         });
 
@@ -127,6 +162,16 @@ public static partial class MauiProgram
             handlers.AddHandler<BlazorWebView, Platforms.Android.TransparentBlazorWebViewHandler>();
 #elif IOS
             handlers.AddHandler<BlazorWebView, Platforms.iOS.TransparentBlazorWebViewHandler>();
+#elif LINUX
+            handlers.AddHandler<BlazorWebView, Microsoft.Maui.Platforms.Linux.Gtk4.BlazorWebView.BlazorWebViewHandler>();
+            handlers.AddHandler<LinuxVlcVideoView, LinuxVlcVideoViewHandler>();
+            handlers.AddHandler<LinuxLottieView, LinuxLottieViewHandler>();
+            // Labs fixes for the native video overlay: non-cascading InputTransparent layouts
+            // stay hit-testable, BoxView paints gradients instead of an opaque placeholder.
+            handlers.AddHandler<Layout, LinuxLayoutHandler>();
+            handlers.AddHandler<BoxView, LinuxBoxViewHandler>();
+            handlers.AddHandler<ScrollView, LinuxScrollViewHandler>();
+            LinuxLabelTextShadow.Install();
 #endif
         });
 
@@ -256,8 +301,9 @@ public static partial class MauiProgram
         // Scoped: IJSRuntime is scoped in Blazor Hybrid; a singleton would capture a dead runtime.
         builder.Services.AddScoped<ISpatialNavService, SpatialNavService>();
         builder.Services.AddScoped<SoftKeyboardJsBridge>();
-#if WINDOWS
-        builder.Services.AddScoped<IWindowsStreamFetchJsBridge, WindowsStreamFetchJsBridge>();
+#if WINDOWS || LINUX
+        // Video.js / audioplayer.js fetch K7 streams through HttpClient (auth + no CORS).
+        builder.Services.AddScoped<IWindowsStreamFetchJsBridge, Playback.WindowsStreamFetchJsBridge>();
 #else
         builder.Services.AddScoped<IWindowsStreamFetchJsBridge, NoOpWindowsStreamFetchJsBridge>();
 #endif
@@ -289,6 +335,9 @@ public static partial class MauiProgram
         NativeAuthTrace.Configure(app.Services);
 #if WINDOWS
         WindowsProtocolActivation.Attach();
+#elif LINUX
+        // Socket + callback file watcher as early as possible; URIs queue until services exist.
+        LinuxProtocolActivation.StartListening();
 #endif
         System.Diagnostics.Debug.WriteLine("K7 MAUI - builder.Build() completed");
 
@@ -368,7 +417,15 @@ public static partial class MauiProgram
                 // IOptions validation throws SR.ID0356 on first CurrentValue access.
                 // Windows uses the same custom scheme as mobile so the system browser
                 // returns the code to the running app instead of http://localhost.
+#if LINUX
+                // Both endpoints stay registered: k7:// is the default, the loopback listener
+                // is opt-in via K7_AUTH_REDIRECT=loopback.
+                options.SetRedirectionEndpointUris(
+                    Linux.LinuxAuthRedirect.CustomSchemeUri,
+                    Linux.LinuxAuthRedirect.LoopbackUri);
+#else
                 options.SetRedirectionEndpointUris(new Uri("k7://callback/login", UriKind.Absolute));
+#endif
 
                 options.UseSystemIntegration();
                 options.UseSystemNetHttp()
@@ -426,6 +483,17 @@ public static partial class MauiProgram
         services.AddScoped<IMauiInitializeScopedService, MauiDatabaseInitializer>();
     }
 
+    /// <summary>
+    /// Redirect URI sent on the authorize request: the custom scheme everywhere, except Linux
+    /// with <c>K7_AUTH_REDIRECT=loopback</c> (see <c>LinuxAuthRedirect</c>).
+    /// </summary>
+    internal static Uri NativeRedirectUri =>
+#if LINUX
+        Linux.LinuxAuthRedirect.Resolve(Environment.GetEnvironmentVariable(Linux.LinuxAuthRedirect.EnvironmentVariable));
+#else
+        new Uri("k7://callback/login", UriKind.Absolute);
+#endif
+
     internal static OpenIddictClientRegistration CreateK7Registration(string serverUrl)
     {
         return new OpenIddictClientRegistration
@@ -434,7 +502,7 @@ public static partial class MauiProgram
             ProviderName = "K7",
             RegistrationId = $"K7:{serverUrl}",
             ClientId = "k7-native",
-            RedirectUri = new Uri("k7://callback/login", UriKind.Absolute),
+            RedirectUri = NativeRedirectUri,
             Scopes = { Scopes.Email, Scopes.Profile, Scopes.Roles, Scopes.OfflineAccess, "api" }
         };
     }

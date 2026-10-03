@@ -96,6 +96,30 @@ public partial class BlazorPage : ContentPage
         SyncWindowsStreamAuthContext();
 #endif
         blazorWebView.WebResourceRequested += OnWebResourceRequested;
+#if LINUX
+        // GTK4 has no MediaElement / SKLottieView handlers. Video and music play in WebKitGTK
+        // (Video.js / audioplayer.js, same as Windows HLS and Windows audio). Drop the native
+        // elements before the page is attached so no handler is ever requested for them.
+        RootGrid.Children.Remove(NativePlayer);
+        RootGrid.Children.Remove(NativeAudioPlayer);
+        RootGrid.Children.Remove(NativeAudioCrossfadePlayer);
+        SplashOverlay.Children.Remove(SplashAnimation);
+        // Skottie -> Gdk.MemoryTexture replaces SKLottieView (splash.json is a MauiAsset next to the exe).
+        var linuxSplashLottie = new Platforms.Linux.LinuxLottieView
+        {
+            Source = Path.Combine(AppContext.BaseDirectory, "splash.json"),
+            WidthRequest = 220,
+            HeightRequest = 120,
+            HorizontalOptions = LayoutOptions.Center,
+            VerticalOptions = LayoutOptions.Center,
+            BackgroundColor = Colors.Transparent,
+            InputTransparent = true,
+            ZIndex = 1
+        };
+        linuxSplashLottie.FirstFrameRendered += () =>
+            Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(400), RevealSplashLottie);
+        SplashOverlay.Children.Add(linuxSplashLottie);
+#endif
 #if ANDROID
         // Audio uses native services on Android - drop unused MediaElements before
         // handlers/ExoPlayers are created (page not attached to Window yet).
@@ -370,8 +394,8 @@ public partial class BlazorPage : ContentPage
         if (exo > 0)
             return exo;
 #endif
-#if WINDOWS
-        var vlc = GetWindowsVlcPositionSeconds();
+#if WINDOWS || LINUX
+        var vlc = GetDesktopVlcPositionSeconds();
         if (vlc > 0)
             return vlc;
 #endif
@@ -601,10 +625,10 @@ public partial class BlazorPage : ContentPage
     {
         return MainThread.InvokeOnMainThreadAsync(async () =>
         {
-#if WINDOWS
-            if (TryHandleWindowsVlcPlay())
+#if WINDOWS || LINUX
+            if (TryHandleDesktopVlcPlay())
                 return;
-            if (IsWindowsWebVideoActive)
+            if (IsDesktopWebVideoActive)
             {
                 TryEvaluateWebViewJs(
                     "try{if(window.playAllK7Video)playAllK7Video();}catch(e){}");
@@ -634,10 +658,10 @@ public partial class BlazorPage : ContentPage
     {
         MainThread.BeginInvokeOnMainThread(() =>
         {
-#if WINDOWS
-            if (TryHandleWindowsVlcPause())
+#if WINDOWS || LINUX
+            if (TryHandleDesktopVlcPause())
                 return;
-            if (IsWindowsWebVideoActive)
+            if (IsDesktopWebVideoActive)
             {
                 TryEvaluateWebViewJs(
                     "try{if(window.pauseAllK7Video)pauseAllK7Video();}catch(e){}");
@@ -657,10 +681,10 @@ public partial class BlazorPage : ContentPage
     {
         MainThread.BeginInvokeOnMainThread(() =>
         {
-#if WINDOWS
-            if (TryHandleWindowsVlcMute(true))
+#if WINDOWS || LINUX
+            if (TryHandleDesktopVlcMute(true))
                 return;
-            if (IsWindowsWebVideoActive)
+            if (IsDesktopWebVideoActive)
                 return;
 #endif
             NativePlayer.ShouldMute = true;
@@ -672,10 +696,10 @@ public partial class BlazorPage : ContentPage
     {
         MainThread.BeginInvokeOnMainThread(() =>
         {
-#if WINDOWS
-            if (TryHandleWindowsVlcMute(false))
+#if WINDOWS || LINUX
+            if (TryHandleDesktopVlcMute(false))
                 return;
-            if (IsWindowsWebVideoActive)
+            if (IsDesktopWebVideoActive)
                 return;
 #endif
             NativePlayer.ShouldMute = false;
@@ -687,10 +711,10 @@ public partial class BlazorPage : ContentPage
     {
         MainThread.BeginInvokeOnMainThread(() =>
         {
-#if WINDOWS
-            if (TryHandleWindowsVlcVolume(volume))
+#if WINDOWS || LINUX
+            if (TryHandleDesktopVlcVolume(volume))
                 return;
-            if (IsWindowsWebVideoActive)
+            if (IsDesktopWebVideoActive)
                 return;
 #endif
             NativePlayer.Volume = volume;
@@ -702,10 +726,10 @@ public partial class BlazorPage : ContentPage
     {
         MainThread.BeginInvokeOnMainThread(() =>
         {
-#if WINDOWS
-            if (TryHandleWindowsVlcRate(rate))
+#if WINDOWS || LINUX
+            if (TryHandleDesktopVlcRate(rate))
                 return;
-            if (IsWindowsWebVideoActive)
+            if (IsDesktopWebVideoActive)
                 return;
 #endif
 #if ANDROID
@@ -721,10 +745,10 @@ public partial class BlazorPage : ContentPage
     {
         MainThread.BeginInvokeOnMainThread(() =>
         {
-#if WINDOWS
-            if (TryHandleWindowsVlcStop())
+#if WINDOWS || LINUX
+            if (TryHandleDesktopVlcStop())
                 return;
-            if (IsWindowsWebVideoActive)
+            if (IsDesktopWebVideoActive)
                 return;
 #endif
 #if ANDROID
@@ -743,8 +767,8 @@ public partial class BlazorPage : ContentPage
     {
 #if ANDROID
         return SeekAndroidVideoAsync(positionSeconds);
-#elif WINDOWS
-        return SeekWindowsVideoAsync(positionSeconds);
+#elif WINDOWS || LINUX
+        return SeekDesktopVideoAsync(positionSeconds);
 #else
         return SeekMediaElementAsync(
             NativePlayer,
@@ -757,7 +781,7 @@ public partial class BlazorPage : ContentPage
 
     private void NativePlayer_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-#if WINDOWS
+#if WINDOWS || LINUX
         return;
 #else
         if (e.PropertyName == nameof(MediaElement.Duration))
@@ -875,8 +899,8 @@ public partial class BlazorPage : ContentPage
 
     private void OpenNativePlayerSource(PlayerSource source)
     {
-#if WINDOWS
-        if (TryOpenWindowsVlc(source))
+#if WINDOWS || LINUX
+        if (TryOpenDesktopVlc(source))
         {
             _nativeAuthRecoveryCount = 0;
             if (MauiNativeVideoChrome.IsEnabled)
@@ -888,12 +912,12 @@ public partial class BlazorPage : ContentPage
             return;
         }
 
-        StopWindowsVlc();
+        StopDesktopVlc();
         if (MauiNativeVideoChrome.IsEnabled)
             OnNativeVideoVisibilityChanged(_playerService.IsVisible);
         return;
 #endif
-#if !WINDOWS
+#if !WINDOWS && !LINUX
         // Android ExoPlayer / iOS AVPlayer via MediaElement.
         // ShowAsync and SourceChanged both marshal to the main thread; if visibility is still
         // pending, force the surface visible before Play.
@@ -1133,11 +1157,19 @@ public partial class BlazorPage : ContentPage
     {
         MainThread.BeginInvokeOnMainThread(() =>
         {
-#if WINDOWS
+#if WINDOWS || LINUX
             NativePlayer.IsVisible = false;
-            ConfigureWindowsVideoPlayerLayout();
+            ConfigureDesktopVideoPlayerLayout();
             OnNativeVideoVisibilityChanged(_playerService.IsVisible);
-            DeviceDisplay.Current.KeepScreenOn = _playerService.IsVisible;
+            try
+            {
+                DeviceDisplay.Current.KeepScreenOn = _playerService.IsVisible;
+            }
+            catch (Exception ex)
+            {
+                // Linux labs DeviceDisplay may not implement the screen-saver inhibit.
+                NativeVideoDebug.Log("KeepScreenOn failed: " + ex.Message);
+            }
 #else
             NativePlayer.IsVisible = _playerService.IsVisible;
             if (_playerService.IsVisible)
@@ -1215,8 +1247,8 @@ public partial class BlazorPage : ContentPage
     {
         MainThread.BeginInvokeOnMainThread(() =>
         {
-#if WINDOWS
-            if (TryHandleWindowsVlcAspect(mode))
+#if WINDOWS || LINUX
+            if (TryHandleDesktopVlcAspect(mode))
                 return;
 #endif
             NativePlayer.Aspect = mode switch
@@ -1571,7 +1603,7 @@ public partial class BlazorPage : ContentPage
 
     private void NativePlayer_PositionChanged(object? sender, MediaPositionChangedEventArgs e)
     {
-#if WINDOWS
+#if WINDOWS || LINUX
         return;
 #elif ANDROID
         var exo = GetExoPlaybackPositionSeconds();
@@ -1611,9 +1643,9 @@ public partial class BlazorPage : ContentPage
         _audioPlayerService.PlaybackStateChanged += HandleAudioPlaybackKeepScreenChanged;
         ApplyKeepScreenOnFromAudio();
 
-#if ANDROID || IOS || WINDOWS
+#if ANDROID || IOS || WINDOWS || LINUX
         // Android/iOS: native services handle audio.
-        // Windows: WebView2 audioplayer.js (same path as browser) handles audio.
+        // Windows / Linux: WebView audioplayer.js (same path as browser) handles audio.
         return;
 #else
         WireNativeAudioElement(NativeAudioPlayer);
@@ -2222,8 +2254,8 @@ public partial class BlazorPage : ContentPage
             // shared HTTP Authorization header so the next fetch uses the new Bearer.
             ApplyExoPlayerHttpAuthHeaders();
             NativeVideoDebug.Log("AccessTokenChanged applied Exo HTTP auth without rebind");
-#elif WINDOWS
-            UpdateWindowsVlcAuthorization();
+#elif WINDOWS || LINUX
+            UpdateDesktopVlcAuthorization();
 #else
             var resumeAt = Math.Max(CaptureNativeVideoResumePosition(), _authRebindResumeOverride ?? 0);
             ReopenNativePlayerSourcePreservingPosition(_playerService.Source, resumeAt);
@@ -2273,9 +2305,9 @@ public partial class BlazorPage : ContentPage
 
 #if ANDROID
                 RebindAndroidNativeVideoPreservingPosition(_playerService.Source.Url, resumeAt);
-#elif WINDOWS
+#elif WINDOWS || LINUX
                 if (!string.IsNullOrEmpty(_playerService.Source?.Url))
-                    TryOpenWindowsVlc(_playerService.Source);
+                    TryOpenDesktopVlc(_playerService.Source);
 #else
                 ReopenNativePlayerSourcePreservingPosition(_playerService.Source, resumeAt);
 #endif
@@ -2290,9 +2322,9 @@ public partial class BlazorPage : ContentPage
 
 #if ANDROID
                 RebindAndroidNativeVideoPreservingPosition(_playerService.Source.Url, resumeAt);
-#elif WINDOWS
+#elif WINDOWS || LINUX
                 if (!string.IsNullOrEmpty(_playerService.Source?.Url))
-                    TryOpenWindowsVlc(_playerService.Source);
+                    TryOpenDesktopVlc(_playerService.Source);
 #else
                 ReopenNativePlayerSourcePreservingPosition(_playerService.Source, resumeAt);
 #endif
@@ -2315,8 +2347,8 @@ public partial class BlazorPage : ContentPage
         if (IsAndroidExoHostActive())
             return GetExoPlaybackPositionSeconds();
 #endif
-#if WINDOWS
-        var vlc = GetWindowsVlcPositionSeconds();
+#if WINDOWS || LINUX
+        var vlc = GetDesktopVlcPositionSeconds();
         if (vlc > 0)
             return vlc;
 #endif
@@ -2369,12 +2401,12 @@ public partial class BlazorPage : ContentPage
         if (exo > 1)
             return Math.Max(exo, pending);
 #endif
-#if WINDOWS
-        var vlc = GetWindowsVlcPositionSeconds();
+#if WINDOWS || LINUX
+        var vlc = GetDesktopVlcPositionSeconds();
         if (vlc > 1)
             return Math.Max(vlc, pending);
 #endif
-#if WINDOWS
+#if WINDOWS || LINUX
         return Math.Max(_playerService.CurrentTime, pending);
 #else
         var fromPlayer = NativePlayer.Position.TotalSeconds;
@@ -2460,9 +2492,11 @@ public partial class BlazorPage : ContentPage
 
     partial void OnAfterNativeVideoSeek();
 
-#if WINDOWS
-    partial void ConfigureWindowsVideoPlayerLayout();
+#if WINDOWS || LINUX
+    partial void ConfigureDesktopVideoPlayerLayout();
+#endif
 
+#if WINDOWS
     private void SyncWindowsStreamAuthContext() =>
         Platforms.Windows.WindowsStreamAuthContext.UpdateFrom(_k7ServerService);
 #endif

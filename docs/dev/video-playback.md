@@ -9,9 +9,10 @@ How first-party clients play video, and why the MAUI hosts differ by platform.
 | Android | Direct Play, HLS remux/encode, offline files: **ExoPlayer** (Media3 via MediaElement) | Text cues: ExoPlayer `SubtitleView` (UX style via `CaptionStyleCompat`). Chrome: native XAML `NativeVideoPlayerOverlay` (ZIndex 5). All Android: `SurfaceView` + Media3 tunneling **off**. Android TV: audio offload **on**, Dolby Vision Profile 8 defaults to HEVC/HDR10 |
 | iOS | MediaElement (AVPlayer) | Same native XAML chrome |
 | Windows | Direct Play + offline: **LibVLC**. HLS transcode: **Video.js** (WebView2) | Native XAML chrome for both (LibVLC and HLS). HLS keeps WebView2 visible under the overlay for Video.js frames only. Remote-control sessions hide the overlay so Blazor `RemoteControlPanel` receives input |
+| Linux (GTK4, experimental) | Direct Play + offline: **LibVLC 4** (vmem frames into a `Gtk.Picture`). HLS transcode: **Video.js** (WebKitGTK) | Native XAML chrome for both, like Windows: the WebKitGTK view paints Video.js under the overlay and loses pointer targeting (`SetCanTarget(false)`). Music: audioplayer.js through a loopback auth proxy |
 | Web (WASM) | Video.js | Blazor `VideoPlayerControlsOverlay` |
 
-Browse / library UI stays Blazor Hybrid. On Android/iOS, when `IPlayerService.IsVisible` is true, MAUI hides the BlazorWebView and shows the native decode surface + XAML chrome. **Windows** hides the WebView for LibVLC Direct Play / local files. HLS transcode keeps WebView2 visible under the same native XAML chrome (Video.js video element only, no Blazor HUD). Web WASM keeps Video.js + Blazor controls. Control plane remains [`IPlayerService`](../../src/Clients/Shared/Interfaces/IPlayerService.cs).
+Browse / library UI stays Blazor Hybrid. On Android/iOS, when `IPlayerService.IsVisible` is true, MAUI hides the BlazorWebView and shows the native decode surface + XAML chrome. **Windows and Linux** hide the WebView for LibVLC Direct Play / local files. HLS transcode keeps the WebView visible under the same native chrome (Video.js video element only, no Blazor HUD). Web WASM keeps Video.js + Blazor controls. Control plane remains [`IPlayerService`](../../src/Clients/Shared/Interfaces/IPlayerService.cs).
 
 [`WindowsVideoPlayback`](../../src/Clients/Shared/Helpers/WindowsVideoPlayback.cs) routes by URL: `ShouldUseLibVlc` for muxed `/direct-stream` and `file://`. `ShouldUseWebVideoPlayer` for HLS (`manifest.m3u8`). Windows **audio** still uses WebView2 (`WindowsAudioPlayback.UsesWebAudioPlayer`).
 
@@ -284,6 +285,158 @@ Local vs Federated when several files exist (not the media title). Play without 
 sends no track indexes so the server `TrackSelector` applies Settings -> Video playback
 preferences. Confirming the dialog sends those indexes and they win over settings. Next
 episode keeps the current audio/subtitle languages when those tracks exist on the next file.
+
+## Linux: LibVLC Direct Play, Video.js HLS transcode
+
+Same split as Windows, driven by the shared desktop glue
+[`BlazorPage.DesktopVlc.cs`](../../src/Clients/MAUI/BlazorPage.DesktopVlc.cs) over
+[`IDesktopVlcVideoPlayer`](../../src/Clients/MAUI/Playback/IDesktopVlcVideoPlayer.cs)
+(Windows: `WindowsVlcVideoPlayer` + D3D11, Linux: `LinuxVlcVideoPlayer`).
+
+- **Direct Play** (muxed `/direct-stream`, offline `file://`):
+  [`LinuxVlcVideoPlayer`](../../src/Clients/MAUI/Platforms/Linux/LinuxVlcVideoPlayer.cs) uses
+  LibVLC 4 **vmem callbacks** (`BGRA`, two buffers, alpha forced opaque): each displayed frame is copied into a
+  `GLib.Bytes`, turned into a `Gdk.MemoryTexture` on the GTK main loop and set on the
+  `Gtk.Picture` of [`LinuxVlcVideoView`](../../src/Clients/MAUI/Platforms/Linux/LinuxVlcVideoView.cs)
+  (handler on the labs `GtkViewHandler`). Aspect modes map to the picture content fit, so VLC
+  renders at the decoded size. libvlc itself comes from the `libvlc/linux-x64` bundle next to
+  the app when present (release builds, `LinuxLibVlcBundle` locates it or `K7_LIBVLC_DIR`): the
+  player dlopens the private libraries (ffmpeg and friends) and `libvlccore.so.9` by full path
+  before libvlc so every plugin dependency resolves to the bundled sonames even next to a distro
+  VLC 3, exports `VLC_PLUGIN_PATH` and runs with `--no-plugins-cache` (read-only install, no
+  `plugins.dat`), without a bundle the resolver falls back to the system `libvlc.so.12`. The
+  bundle contents and how it is built are described in
+  [releasing.md](releasing.md#linux-libvlc-bundle). Auth goes through the same loopback
+  `VlcAuthProxy`, seek and audio / PGS track switches reopen with `:start-time` like Windows. Text subtitles are the XAML
+  sidecar label (no WinUI popup). Keyboard reaches the native overlay through a capture-phase
+  `Gtk.EventControllerKey` on the window, fullscreen is `Gtk.Window.Fullscreen`.
+  The CPU copy (decoded size x 4 bytes per frame) is fine for 1080p, a `Gtk.GLArea` /
+  `libvlc_video_set_output_callbacks` OpenGL path is the follow-up for 4K.
+- **Native chrome over GTK** (`BlazorPage.Linux`, `LinuxWidgetStack`, `LinuxGestureBridge`):
+  GTK4 paints siblings in child order and the labs layout panel never reorders them (its
+  `MapZIndex` even inverts `InsertAfter(parent, null)`, which inserts first, not last), so the
+  page pins the stack explicitly when a Direct Play session starts: decode `Gtk.Picture` sent
+  to the back, `NativeVideoPlayerOverlay` brought to the front. The labs `BlazorWebViewHandler`
+  is not a `GtkViewHandler`, so `IsVisible` / `Opacity` / `InputTransparent` never reach the
+  WebKit widget: the page calls `SetVisible(false)` / `SetCanTarget(false)` on it for the
+  session and restores it when the session stops (HLS keeps the WebView). The labs handlers
+  also never attach MAUI `GestureRecognizers`, `LinuxGestureBridge` wires `Gtk.GestureClick`,
+  `EventControllerMotion` and `GestureDrag` on every overlay view that owns Tap / Pointer /
+  Pan recognizers and raises the MAUI events through the internal `Send*` entry points
+  (press count 1 = single tap, 2 = double tap). `LinuxVlcVideoPlayer` keeps one vmem buffer
+  set per libvlc video output (keyed by the vmem `opaque` handle, freed in the cleanup
+  callback): VLC 4 stops asynchronously, so a seek reopen used to free the buffers the previous
+  decoder was still writing to. `gtk stack ...` log lines dump the RootGrid children
+  (visibility, opacity, hit-testing, allocation) at session start and three seconds later.
+  Four more labs gaps are closed on the K7 side: `LinuxRootLayoutDriver` marks the page root
+  panel `IsExternallyManaged` and re-runs the MAUI measure / arrange pass from a frame-clock
+  tick whenever the panel allocation changes (maximize, fullscreen) or the tree invalidates its
+  measure (a panel toggling `IsVisible`), then re-sorts every layout panel by MAUI ZIndex (labs
+  arranges the root once with the window default size and keeps insertion order).
+  `LinuxLayoutHandler` keeps `InputTransparent` layouts with `CascadeInputTransparent=false`
+  targetable (GTK picking skips a non-targetable widget and its whole subtree, so the chrome
+  buttons never got clicks) while the gesture bridge forwards clicks on their empty area to the
+  tappable sibling underneath (the gesture catchers), `LinuxBoxViewHandler` paints `BoxView`
+  gradients / solid backgrounds with Cairo instead of the labs opaque grey placeholder (the
+  chrome scrim), `LinuxCrashLog` writes unhandled exceptions with their stack to stderr and
+  `~/.local/state/k7/crash.log`. `LinuxScrollViewHandler` reports the content height (labs
+  returns 50px, which collapsed the settings and cast panels) and `LinuxOverlayTheme` installs
+  a display-wide GTK CSS provider scoped to the `k7-video-overlay` class that flattens the
+  themed GTK buttons, labels and scrollbars under the overlay (no borders, shadows or 38px
+  minimums, white text, translucent hover). Clicks and pointer moves that land on the empty
+  area of a pass-through layout are re-dispatched by picking inside the topmost sibling below
+  (settings / cast rows get synthetic Tapped and hover, `Gtk.Button`s are activated). No vmem
+  cleanup callback is registered: LibVLCSharp's trampoline declares it `ref IntPtr opaque`
+  while libvlc passes `void *opaque` (the MediaPlayer GCHandle), so the marshaller dereferences
+  the handle and the process aborts on every video output teardown (seek reopen, track switch,
+  close). The vmem opaque is the buffer-set id (LibVLCSharp virtualizes it), stale sets are
+  released on the next format callback and on Stop. Window-level and per-view pointer motion
+  ignores GTK's synthesized motion events (same coordinates after a widget-tree change), which
+  otherwise re-show the chrome right after every hide. The `LibVLC` instance is process-wide
+  and so is the `MediaPlayer` (`_sharedLibVlc` / `_sharedPlayer`): VLC 4 recycles the video
+  output across inputs but destroys it on player release, which aborts the `vlc-vout` thread
+  on the nightly builds, so sessions only Stop and reuse the player (static vmem callbacks
+  and events forward to the current session). libvlc runs with `--codec=avcodec`: VLC 4 removed `--spdif` on Linux and tries its
+  S/PDIF pass-through decoder first for AC3 / E-AC3 / DTS, which the Pulse output rejects
+  only after a ~10s timeout (clock stalled at every open and seek) before falling back to PCM. `LinuxUiScale` scales the chrome
+  glyphs and the subtitle font like WinUI / Android would (GTK reports scale 1 under WSLg
+  whatever the monitor, `K7_GTK_UI_SCALE` overrides the monitor-based factor). The label
+  provider also re-emits colour / font / background in its own CSS block, because the labs
+  per-widget block is dropped as a whole when one value is rejected. HLS on Linux renders the
+  Blazor `<video>` element under the native overlay (same split as Windows HLS, not the Web HUD).
+  Music: WebKitGTK's GStreamer backend fails on `blob:` audio, so `windowsStreamFetch.js` asks
+  the bridge (`GetLocalStreamUrlAsync`) for a loopback `VlcAuthProxy` URL when the page carries
+  `window.K7_LINUX_GTK` (user script injected by `BlazorPage.Linux`). Admin charts: the labs
+  WebView handler does not strip query strings, so `ApexChartAssets.Prepare` points the charts
+  at the unversioned Blazor-ApexCharts module on the GTK host, and the GTK host marker script
+  strips the query of `app://` URLs in `URL.prototype.toString` (the path Blazor's `import`
+  interop takes). The Linux device registers `achannels:2` so HLS transcodes are stereo
+  (WebKitGTK stalls on multichannel AAC), Direct Play keeps the original tracks. F9 in the
+  player dumps the GTK stacks and the sidecar label state to the terminal, `vlc clock ...`
+  lines trace the raw libvlc clock every 5 seconds. The build also rewrites the
+  Blazor-ApexCharts modules copied to the Linux output (`K7StripModuleVersionQuery`) so their
+  static `import "./apexcharts.esm.js?ver=..."` loses the query the labs handler cannot serve.
+  `Program.ConfigureWebKitSandbox` disables WebKit's bubblewrap sandbox under WSLg (or with
+  `K7_WEBKIT_DISABLE_SANDBOX=1`): inside it the web process cannot reach the WSLg PulseAudio
+  socket and every HTML5 media element fails ("PulseAudio: Unable to connect"), elsewhere the
+  audio server directories are added to the sandbox. `LinuxSessionEnvironment` also exports
+  `ALSOFT_DRIVERS=pulse,alsa` (OpenAL Soft, WebKit's Web Audio backend, otherwise probes
+  PipeWire and bare ALSA) and `GST_PLUGIN_FEATURE_RANK=pulsesink:MAX`. The loopback proxy
+  answers with CORS headers (`<audio crossorigin>`) and handles `OPTIONS` preflights, music
+  proxies trace their requests (`vlc-proxy GET /direct range=...`). The Linux player maps
+  libvlc Time by continuity (relative-to-start or absolute, whichever keeps the published clock
+  continuous) because VLC 4 switches between both after `:start-time`, the seek spinner over
+  Video.js hides once the clock advanced 0.75s (no Buffering state on WebKitGTK), and the
+  volume popover only hides when GTK reports the pointer outside button and popover. Under
+  WSLg (no usable GPU) or with `K7_WEBKIT_SOFTWARE_RENDERING=1`, `Program` exports
+  `WEBKIT_DISABLE_DMABUF_RENDERER=1` (compositing itself stays on, MSE video needs it): the
+  DMA-BUF renderer otherwise leaves the view black once an accelerated `<video>` goes away, the
+  page also unmaps / maps the WebView whenever it becomes interactive again so WebKit redraws.
+  `K7_GTK_TRACE_POINTER=1` logs the GTK enter / leave the gesture bridge relays. GTK skips the
+  whole subtree of a non-targetable widget while picking, so a pass-through layout cannot be
+  made hit-transparent natively: besides taps and hover, the bridge also drives
+  `IGraphicsView` interactions (press, drag, release, hover) of the GraphicsViews that sit
+  under the empty area of such a layout (volume slider). Pass-through hover follows MAUI
+  semantics: entering a child view does not exit its pointer-aware ancestors, and
+  `IsPointerOver` is true for a view whenever the pointer is in one of its descendants. Every
+  loopback proxy session traces its first twelve requests (`vlc-proxy GET /direct range=...`).
+  The labs `GtkWebViewManager` renders Blazor on `Dispatcher.CreateDefault()`, a thread that is
+  not the GTK main thread: component handlers of `IPlayerService` events raised by the host
+  must go through `InvokeAsync` (WinUI and Android share the UI thread with the renderer, so
+  a direct `StateHasChanged` only fails on GTK). Linux Direct Play opens media with
+  `:demux=avformat`: VLC 4's Matroska demuxer loads the Cues over HTTP but fails
+  `DEMUX_SET_TIME`, so the core reads and discards from the first cluster up to `:start-time`
+  (minutes-long resume, remaining duration reported as Length). `K7_VLC_DEMUX=native` restores
+  the built-in demuxers. Playback rate
+  changes reopen the input at the current position with a `:rate=` option: VLC 4 stores the
+  rate in the player but the running HTTP input does not apply it live. `LinuxLabelTextShadow`
+  maps the label `Shadow` to a CSS `text-shadow` (offset plus a thin outline) instead of the labs
+  `box-shadow`, so the sidecar subtitle style stays readable.
+- **HLS transcode**: Video.js in WebKitGTK **under the native chrome**, as on Windows.
+  `ShowBlazorWebViewUnderNativeChrome` keeps the GTK WebView visible and calls
+  `SetCanTarget(false)` on it (labs ignores `InputTransparent`), the overlay sits above it in
+  the RootGrid ZIndex order and owns keyboard and pointer. Stream
+  requests (manifests, segments, sidecar VTT, music) go through the same
+  [`WindowsStreamFetchJsBridge`](../../src/Clients/MAUI/Playback/StreamFetch/WindowsStreamFetchJsBridge.cs)
+  as Windows (HttpClient with the bearer): the `app://localhost` WebView origin is not in the
+  server CORS list. `BlazorPage.Linux` and `Program` also register the `app` scheme as local,
+  CORS-enabled and secure in WebKit, otherwise stylesheets and dynamic `import()` of ES modules (ApexCharts) fail with
+  "Importing a module script failed".
+- **Server**: native Linux is a normal native client for Direct Play (`AllowsVideoDirectPlay`)
+  and a Video.js consumer for HLS (`UsesVideoJsHlsManifest`, video-only `CODECS`).
+  `ForcesWindowsHlsEncode` stays Windows-only: remux copy is allowed when WebKitGTK MSE accepts
+  the codec. The Linux `CodecService` advertises the LibVLC catalog
+  (`LibVlcWindowsCapabilities`, VA-API or avcodec), so MKV / HEVC / EAC3 stay muxed.
+- **Music**: audioplayer.js in WebKitGTK (`WindowsAudioPlayback.UsesWebAudioPlayer`).
+- **Runtime**: LibVLCSharp 4 needs a **VLC 4** libvlc (`libvlc.so.12`, `libvlc.so.5` or the
+  unversioned `-dev` symlink are probed). Distros ship VLC 3, install a VLC 4 nightly
+  (Ubuntu: `ppa:videolan/master-daily`, or a nightlies.videolan.org build). Without a VLC 4
+  libvlc the open fails with `libvlc-unavailable`, `BlazorPage.Linux` shows the
+  `LinuxLibVlcUnavailable` warning snackbar once and promotes the session to the Video.js
+  transcode ladder (`IPlayerService.TryRecoverPlaybackStartAsync`), so video still plays.
+- **Logs**: on Linux `VlcPlayerLog` writes `K7 VLC info|warn ...` to stderr (terminal or
+  `journalctl --user`), including native libvlc errors and warnings (`vlc-native ...`), the
+  vmem format, play / reopen / seek reasons and the first-frame fallback.
 
 ## Demuxed HLS timestamps (Web vs Android)
 

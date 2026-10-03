@@ -34,9 +34,9 @@ dotnet workload install maui
 
 Android emulator often needs `http://10.0.2.2:PORT` instead of `localhost`. Physical devices need the host LAN IP. Mac Catalyst builds are untested by the maintainer. iOS device builds are compiled in CI (`maui-ios-smoke`) and the sideload IPA is produced by [client-release](releasing.md).
 
-Native video chrome on Android/iOS/Windows is documented in [video-playback.md](video-playback.md). When `MauiNativeVideoChrome.IsEnabled` is true, the host shows `NativeVideoPlayerOverlay` above ExoPlayer (Android), MediaElement (iOS), LibVLC (Windows Direct Play), or Video.js in WebView2 (Windows HLS) instead of the Blazor HUD. Web WASM stays on Video.js + full Blazor controls.
+Native video chrome on Android/iOS/Windows/Linux is documented in [video-playback.md](video-playback.md). When `MauiNativeVideoChrome.IsEnabledFor` is true, the host shows `NativeVideoPlayerOverlay` above ExoPlayer (Android), MediaElement (iOS), LibVLC (Windows and Linux Direct Play), or Video.js in the WebView (Windows HLS in WebView2, Linux HLS in WebKitGTK) instead of the Blazor HUD. Web WASM stays on Video.js + full Blazor controls.
 
-OIDC on MAUI uses `k7://callback/login` on all platforms (Windows included). The unpackaged Windows build registers that protocol under HKCU at startup (no admin). After Windows system-browser sign-in the server sends the tab to `/auth/complete` (close message) then that page opens `k7://`. Android/iOS keep the direct custom-scheme 302. `http://localhost/` remains accepted by the server for older clients. Register compatible URIs at your IdP when testing SSO.
+OIDC on MAUI uses `k7://callback/login` on all platforms (Windows and Linux included). The unpackaged Windows build registers that protocol under HKCU at startup (no admin). The Linux build writes `~/.local/share/applications/com.k7.maui.desktop` with `MimeType=x-scheme-handler/k7` and runs `xdg-mime default` (per user, no root). After Windows or Linux system-browser sign-in the server sends the tab to `/auth/complete` (close message) then that page opens `k7://`. Android/iOS keep the direct custom-scheme 302. `http://localhost/` remains accepted by the server for older clients. On Linux, `K7_AUTH_REDIRECT=loopback` switches the authorize request to the OpenIddict loopback listener for sandboxed browsers that cannot launch host applications for custom schemes. Register compatible URIs at your IdP when testing SSO.
 
 Android (single TFM via `K7PublishPlatform`; do not pass global `-p:TargetFrameworks=`):
 
@@ -62,6 +62,31 @@ dotnet publish src/Clients/MAUI/K7.Clients.MAUI.csproj \
 
 Output entry point is `K7.Clients.MAUI.exe` (plus `K7.Clients.MAUI.pri`). Release CI also copies those to `K7.exe` / `K7.pri` for a shorter launcher name - WinUI requires the `.pri` basename to match the `.exe`. Do not ship a renamed exe without the matching `.pri`.
 
+### Linux desktop (GTK4)
+
+Experimental, built on the [dotnet/maui-labs Linux.Gtk4](https://github.com/dotnet/maui-labs/tree/main/platforms/Linux.Gtk4) backend (`Microsoft.Maui.Platforms.Linux.Gtk4*` preview packages). It is the plain `net10.0` TFM of the MAUI project: no custom TFM and no MAUI workload (the MAUI SDK is not imported for that TFM). `Platforms/Linux` holds the GTK entry point, the `k7://` registration and platform services. Helpers the Windows smoke tests cover live in `src/Clients/MAUI/Linux`. On a Linux host the project defaults to `net10.0`. Elsewhere opt in with `K7PublishPlatform=linux`.
+
+Runtime requirements: GTK 4.12+ and WebKitGTK 6.x (`libgtk-4-1`, `libwebkitgtk-6.0-4` on Debian/Ubuntu, `gtk4` and `webkitgtk6.0` on Fedora), `xdg-utils` for the scheme handler, and a VLC 4 libvlc for Direct Play (LibVLCSharp 4 alpha, same as Windows). Release builds ship libvlc 4 next to the app in `libvlc/linux-x64` (produced by `tools/linux/bundle-libvlc.sh`, see [releasing.md](releasing.md#linux-libvlc-bundle)). A source checkout has no bundle, so either run that script once on an Ubuntu 24.04 machine or install a system VLC 4. Distros ship VLC 3. `K7_LIBVLC_DIR` points at a bundle elsewhere. Restricted user namespaces (Ubuntu 24.04+, containers) may need `MAUI_WEBKIT_DISABLE_SANDBOX=1`.
+
+```bash
+dotnet run --project src/Clients/MAUI/K7.Clients.MAUI.csproj -f net10.0 -p:K7PublishPlatform=linux
+
+dotnet publish src/Clients/MAUI/K7.Clients.MAUI.csproj \
+  -f net10.0 \
+  -c Release \
+  -r linux-x64 \
+  --self-contained true \
+  -p:K7PublishPlatform=linux
+```
+
+The output entry point is `K7.Clients.MAUI`. `wwwroot/` (own assets plus `_content/` of the RCLs) is copied next to it by `K7CopyStaticWebAssetsLinux` / `K7PublishStaticWebAssetsLinux`: the GTK BlazorWebView serves files from disk. Cross-compiling from Windows works (`-r linux-x64`), so `dotnet build -p:K7PublishPlatform=linux` is a valid compile check on any host. Runtime needs a Linux desktop session.
+
+`K7_WEBKIT_INSPECTOR=1` opens the WebKit Web Inspector. Under WSLg / RDP, WebKitGTK reports wrong `KeyboardEvent.code` values. Enter detection in `navigation.js` and the card components trusts `code` only when `key` is empty or `Unidentified`. `audioplayer.js` accepts `key` as well as `code`. `Program.Main` clones the process culture with a dot decimal separator so a French alpha `0,6` does not drop a GTK style block. The `app` scheme is registered as local, CORS-enabled and secure before the first WebView. `LinuxSessionEnvironment` fills `XDG_RUNTIME_DIR` and `PULSE_SERVER` when the shell did not. LibVLC uses `--aout=pulse`. WebKitGTK media (music, HLS) needs the GStreamer good, bad, libav, pulseaudio and gl plugins.
+
+Direct Play is LibVLC 4 through vmem into a `Gtk.Picture`, with the native overlay. HLS is Video.js in WebKitGTK under that same overlay (the WebView stays visible and loses pointer targeting). Music is audioplayer.js. MediaElement and SKLottieView have no GTK handlers and are removed at construction. The splash Lottie is Skottie into a `Gtk.Picture` (`LinuxLottieView`). See [video-playback.md](video-playback.md#linux-libvlc-direct-play-videojs-hls-transcode).
+
+`k7://` on Linux: the browser launches a second process with the URI. The primary holds `$XDG_RUNTIME_DIR/k7-maui-primary.lock`. A second process never boots GTK. It forwards the URI over `$XDG_RUNTIME_DIR/k7-maui-protocol.sock`, else the callback file, then exits. Release assets: `K7-{version}-linux-x64.deb` and `K7-{version}-linux-x64.tar.gz`. See [releasing.md](releasing.md).
+
 iOS device (macOS host, single TFM via `K7PublishPlatform`):
 
 ```bash
@@ -78,7 +103,7 @@ dotnet build src/Clients/MAUI/K7.Clients.MAUI.csproj \
 
 Release CI applies extra sideload packaging (ad-hoc IPA, AltStore `apps.json`). See [releasing.md](releasing.md) and [`altstore/README.md`](../../altstore/README.md).
 
-Published Release assets (APK, Windows zip, iOS sideload IPA) are produced by [client-release](releasing.md) on each GitHub Release.
+Published Release assets (APK, Windows zip, Linux deb and tarball, iOS sideload IPA) are produced by [client-release](releasing.md) on each GitHub Release.
 
 Android TV: leanback launcher category is registered - use a TV emulator for D-pad testing. Fire TV Stick uses the same APK (leanback / Fire TV feature / AFT model, not UiMode alone). Couch layout stays near 1920 CSS px so a 4K framebuffer does not shrink the 10-foot UI.
 

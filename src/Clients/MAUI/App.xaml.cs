@@ -10,6 +10,9 @@ using K7.Clients.MAUI.Platforms.Android;
 #if WINDOWS
 using K7.Clients.MAUI.Platforms.Windows;
 #endif
+#if LINUX
+using K7.Clients.MAUI.Platforms.Linux;
+#endif
 
 namespace K7.Clients.MAUI;
 
@@ -219,6 +222,8 @@ public partial class App : Application
         Debug.WriteLine($"K7 MAUI - App.xaml.cs - OnAppLinkRequestReceived - Uri: {uri}");
 #if WINDOWS
         WindowsProtocolActivation.HandleUri(uri);
+#elif LINUX
+        LinuxProtocolActivation.HandleUri(uri);
 #endif
         base.OnAppLinkRequestReceived(uri);
     }

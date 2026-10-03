@@ -203,9 +203,13 @@ window.K7._onKeyDown = function (e) {
     const tag = (e.target.tagName || '').toLowerCase();
     if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
 
+    // Accept `code` (physical key, historical behaviour) or `key`: WebKitGTK under WSLg/RDP
+    // reports wrong `code` values for the arrows (Convert / NonConvert / NumpadEnter).
+    const keyIs = (name, code) => e.code === code || e.key === name;
+    const isArrowOrVolume = keyIs('ArrowRight', 'ArrowRight') || keyIs('ArrowLeft', 'ArrowLeft')
+        || keyIs('ArrowUp', 'ArrowUp') || keyIs('ArrowDown', 'ArrowDown');
     // Only intercept arrow/volume keys when focus is NOT on a spatial-nav focusable element
     // outside the audio player bar. This prevents stealing arrows from page navigation.
-    const isArrowOrVolume = e.code === 'ArrowRight' || e.code === 'ArrowLeft' || e.code === 'ArrowUp' || e.code === 'ArrowDown';
     if (isArrowOrVolume) {
         const active = document.activeElement;
         // Allow if focus is on body (nothing focused) or inside the audio bottom bar
@@ -214,14 +218,14 @@ window.K7._onKeyDown = function (e) {
     }
 
     let action = null;
-    if (e.code === 'Space' && !e.ctrlKey && !e.metaKey && !e.altKey) action = 'PlayPause';
-    else if (e.code === 'ArrowRight' && !e.ctrlKey && !e.shiftKey) action = 'SeekForward';
-    else if (e.code === 'ArrowLeft' && !e.ctrlKey && !e.shiftKey) action = 'SeekBackward';
-    else if (e.code === 'ArrowRight' && e.ctrlKey) action = 'NextTrack';
-    else if (e.code === 'ArrowLeft' && e.ctrlKey) action = 'PreviousTrack';
-    else if ((e.code === 'KeyM') && !e.ctrlKey && !e.metaKey) action = 'ToggleMute';
-    else if (e.code === 'ArrowUp' && !e.ctrlKey) action = 'VolumeUp';
-    else if (e.code === 'ArrowDown' && !e.ctrlKey) action = 'VolumeDown';
+    if (keyIs(' ', 'Space') && !e.ctrlKey && !e.metaKey && !e.altKey) action = 'PlayPause';
+    else if (keyIs('ArrowRight', 'ArrowRight') && !e.ctrlKey && !e.shiftKey) action = 'SeekForward';
+    else if (keyIs('ArrowLeft', 'ArrowLeft') && !e.ctrlKey && !e.shiftKey) action = 'SeekBackward';
+    else if (keyIs('ArrowRight', 'ArrowRight') && e.ctrlKey) action = 'NextTrack';
+    else if (keyIs('ArrowLeft', 'ArrowLeft') && e.ctrlKey) action = 'PreviousTrack';
+    else if ((keyIs('m', 'KeyM') || keyIs('M', 'KeyM')) && !e.ctrlKey && !e.metaKey) action = 'ToggleMute';
+    else if (keyIs('ArrowUp', 'ArrowUp') && !e.ctrlKey) action = 'VolumeUp';
+    else if (keyIs('ArrowDown', 'ArrowDown') && !e.ctrlKey) action = 'VolumeDown';
     if (action) {
         e.preventDefault();
         ref.invokeMethodAsync('OnKeyboardAction', action)

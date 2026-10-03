@@ -42,7 +42,7 @@ Open `http://localhost:7080` and complete first-run setup. Install details: [doc
 - **Federation** - link two K7 instances (yours and a friend's) to share and stream remote media and metadata without duplicating files
 
 **Clients**
-- **Web, Android (phone + TV), Windows, iOS, Mac** - same UI everywhere (Blazor WASM or MAUI + Blazor)
+- **Web, Android (phone + TV), Windows, iOS, Mac, Linux (experimental GTK4)** - same UI everywhere (Blazor WASM or MAUI + Blazor)
 - **Fully keyboard-navigable** - spatial navigation across the whole app
 - **Remote control** - drive playback on one device (TV, phone, browser) from another logged-in client on the same server
 - **Chromecast (Web and Android only)** - cast video and music to any supported device

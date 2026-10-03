@@ -18,7 +18,7 @@ public partial class BlazorPage
     private bool _remoteControlChromeSubscribed;
     private bool _handoverChromeSubscribed;
 
-#if ANDROID || IOS || WINDOWS
+#if ANDROID || IOS || WINDOWS || LINUX
     private bool _nativeVideoWebViewShellSaved;
     private bool _savedBlazorWebViewIsVisible = true;
     private double _savedBlazorWebViewOpacity = 1;
@@ -95,7 +95,7 @@ public partial class BlazorPage
     /// Pending handover also restores the WebView so the takeover dialog can paint.
     /// </summary>
     private bool WantsNativeVideoChrome =>
-        MauiNativeVideoChrome.IsEnabled
+        MauiNativeVideoChrome.IsEnabledFor(_playerService.Source?.MimeType, _playerService.Source?.Url)
         && _playerService.IsVisible
         && _handoverForChrome is not { HasPendingHandover: true }
         && !(_remoteControlForChrome is { IsControlling: true, IsAudio: false });
@@ -115,7 +115,7 @@ public partial class BlazorPage
         EnsureHandoverChromeSubscription();
 
         var showChrome = WantsNativeVideoChrome;
-#if WINDOWS
+#if WINDOWS || LINUX
         var source = _playerService.Source;
         var useLibVlcSurface = showChrome
             && (string.IsNullOrEmpty(source?.Url)
@@ -128,11 +128,11 @@ public partial class BlazorPage
         _nativeOverlay?.SetActive(showChrome);
         NativePlayerCloseButton.IsVisible = false;
 
-#if WINDOWS
-        SetWindowsVlcSurfaceVisible(showChrome && useLibVlcSurface);
+#if WINDOWS || LINUX
+        SetDesktopVlcSurfaceVisible(showChrome && useLibVlcSurface);
 #endif
 
-#if ANDROID || IOS || WINDOWS
+#if ANDROID || IOS || WINDOWS || LINUX
         if (!showChrome)
         {
             // Remote-control UI lives in Blazor even when local IsVisible is false (attach-only).
@@ -158,13 +158,13 @@ public partial class BlazorPage
         if (useLibVlcSurface)
         {
             HideBlazorWebViewForNativeVideo();
-#if WINDOWS
+#if WINDOWS || LINUX
             BackgroundColor = Colors.Black;
 #endif
         }
         else
         {
-#if WINDOWS
+#if WINDOWS || LINUX
             ShowBlazorWebViewUnderNativeChrome();
             BackgroundColor = Colors.Black;
 #else
@@ -174,7 +174,7 @@ public partial class BlazorPage
 #endif
     }
 
-#if ANDROID || IOS || WINDOWS
+#if ANDROID || IOS || WINDOWS || LINUX
     private void HideBlazorWebViewForNativeVideo()
     {
         if (!_nativeVideoWebViewShellSaved)
@@ -202,7 +202,7 @@ public partial class BlazorPage
 #endif
     }
 
-#if WINDOWS
+#if WINDOWS || LINUX
     /// <summary>
     /// HLS / Video.js: WebView paints frames under native XAML chrome; input stays on the overlay.
     /// </summary>
@@ -219,6 +219,11 @@ public partial class BlazorPage
         blazorWebView.IsVisible = true;
         blazorWebView.Opacity = 1;
         blazorWebView.InputTransparent = true;
+#if LINUX
+        // Labs ignores IsVisible / InputTransparent on the WebView: drive the GTK widget.
+        SetLinuxWebViewShown(true);
+        SetLinuxWebViewInteractive(false);
+#endif
         _ = TryEvaluateWebViewJs(
             "try{if(window.K7&&K7.AmbientTheme&&K7.AmbientTheme.stop)K7.AmbientTheme.stop();"
             + "if(window.K7&&K7.setNativePlayerActive)K7.setNativePlayerActive(true,true);"
@@ -268,6 +273,10 @@ public partial class BlazorPage
         blazorWebView.IsVisible = _savedBlazorWebViewIsVisible;
         blazorWebView.Opacity = 0;
         blazorWebView.InputTransparent = _savedBlazorWebViewInputTransparent;
+#if LINUX
+        SetLinuxWebViewShown(true);
+        SetLinuxWebViewInteractive(true);
+#endif
         var targetOpacity = _savedBlazorWebViewOpacity;
         _nativeVideoWebViewShellSaved = false;
 #if ANDROID

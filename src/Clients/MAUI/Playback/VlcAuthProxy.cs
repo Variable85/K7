@@ -57,6 +57,11 @@ internal sealed class VlcAuthProxy : IDisposable
 
     public string? LocalUrl { get; private set; }
 
+    /// <summary>Trace every request line (music through WebKit; off for LibVLC Range storms).</summary>
+    public bool LogRequests { get; set; }
+
+    private int _tracedRequests;
+
     public string? TargetUrl => _targetUrl;
 
     public bool IsHls => _hlsMode;
@@ -332,6 +337,28 @@ internal sealed class VlcAuthProxy : IDisposable
                             out var keepAlive))
                         return;
 
+                    // The first requests of every session show how the client seeks (Range or
+                    // sequential read) without flooding the log on long playbacks.
+                    if (LogRequests || _tracedRequests++ < 12)
+                        VlcPlayerLog.Info("vlc-proxy " + method + " " + pathAndQuery + (range is null ? "" : " range=" + range));
+
+                    if (method.Equals("OPTIONS", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // CORS preflight from a crossorigin media element (WebKitGTK music path).
+                        var preflight = Encoding.ASCII.GetBytes(
+                            "HTTP/1.1 204 No Content\r\n"
+                            + "Access-Control-Allow-Origin: *\r\n"
+                            + "Access-Control-Allow-Methods: GET, HEAD, OPTIONS\r\n"
+                            + "Access-Control-Allow-Headers: Range, Content-Type\r\n"
+                            + "Access-Control-Max-Age: 600\r\n"
+                            + (keepAlive ? "Connection: keep-alive\r\n\r\n" : "Connection: close\r\n\r\n"));
+                        await stream.WriteAsync(preflight, cancellationToken).ConfigureAwait(false);
+                        if (!keepAlive)
+                            return;
+
+                        continue;
+                    }
+
                     if (IsRawMasterPath(pathAndQuery))
                     {
                         await PumpRawMasterAsync(
@@ -430,6 +457,17 @@ internal sealed class VlcAuthProxy : IDisposable
                                 + " hasStart="
                                 + pathAndQuery.Contains("startSeconds=", StringComparison.OrdinalIgnoreCase));
                         }
+                    }
+
+                    if (!_hlsMode && (LogRequests || _tracedRequests <= 12))
+                    {
+                        // Upstream answer to the Range above: 206 + Content-Range means the client
+                        // can seek; 200 means it has to read sequentially up to the start time.
+                        VlcPlayerLog.Info(
+                            "vlc-proxy <- " + ((int)response.StatusCode).ToString(CultureInfo.InvariantCulture)
+                            + " len=" + (response.Content.Headers.ContentLength?.ToString(CultureInfo.InvariantCulture) ?? "-")
+                            + " content-range=" + (response.Content.Headers.ContentRange?.ToString() ?? "-")
+                            + " accept-ranges=" + (response.Headers.AcceptRanges.Count > 0 ? string.Join(",", response.Headers.AcceptRanges) : "-"));
                     }
 
                     var lengthKnown = response.Content.Headers.ContentLength is not null
@@ -1666,6 +1704,9 @@ internal sealed class VlcAuthProxy : IDisposable
 
         if (acceptByteRanges)
             header.Append("Accept-Ranges: bytes\r\n");
+        // The app:// WebView origin is never in anyone's allow list; <audio crossorigin> needs it.
+        header.Append("Access-Control-Allow-Origin: *\r\n");
+        header.Append("Access-Control-Expose-Headers: Content-Length, Content-Range, Accept-Ranges, Content-Type\r\n");
         header.Append(keepAlive ? "Connection: keep-alive\r\n\r\n" : "Connection: close\r\n\r\n");
 
         var headerBytes = Encoding.ASCII.GetBytes(header.ToString());

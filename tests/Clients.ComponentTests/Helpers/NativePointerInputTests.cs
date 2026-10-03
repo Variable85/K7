@@ -36,6 +36,8 @@ public class NativePointerInputTests
     [Test]
     public void SupportsHoverRecognizers_ShouldBeFalse_WhenNeitherDesktopNorMobile()
     {
+        NativePointerInput.ForPlatform(isWindows: false, isAndroid: false, isIos: false, isLinuxDesktop: true)
+            .Should().BeTrue();
         NativePointerInput.ForPlatform(isWindows: false, isAndroid: false, isIos: false)
             .Should().BeFalse();
     }

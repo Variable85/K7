@@ -1,11 +1,11 @@
-#if WINDOWS
+#if WINDOWS || LINUX
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace K7.Clients.MAUI.Platforms.Windows;
+namespace K7.Clients.MAUI.Playback;
 
 /// <summary>
-/// HLS URL helpers used by the Windows WebView2 Video.js xhr bridge.
+/// HLS URL helpers used by the desktop (WebView2 / WebKitGTK) Video.js xhr bridge.
 /// </summary>
 public static partial class HlsStreamUrlHelper
 {

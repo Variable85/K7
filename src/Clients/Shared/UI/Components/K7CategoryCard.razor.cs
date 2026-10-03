@@ -236,8 +236,12 @@ public partial class K7CategoryCard : IDisposable
         if (e.Key is "Enter" or "NumpadEnter" or "Select" or "DpadCenter")
             return true;
 
-        var code = string.IsNullOrEmpty(e.Code) ? e.Key : e.Code;
-        return code is "Enter" or "NumpadEnter" or "Select" or "DpadCenter";
+        // Code is a physical-key hint and can disagree with Key (WebKitGTK under WSLg reports
+        // ArrowDown as NumpadEnter). Trust it only when Key did not identify the key.
+        if (!string.IsNullOrEmpty(e.Key) && e.Key != "Unidentified")
+            return false;
+
+        return e.Code is "Enter" or "NumpadEnter" or "Select" or "DpadCenter";
     }
 
     private void OnKeyDown(KeyboardEventArgs e)

@@ -309,6 +309,16 @@ function ensurePlaybackStarted(player, id) {
 
 window.initVideoJs = function (id, videoPlayer, videoContainer, options, dotNetRef) {
     ensurePlatformStreamBridge();
+    // The Blazor element reference can be stale after a native-player session blanked the
+    // surfaces (MAUI hosts): fall back to the live <video> in the container.
+    if (!videoPlayer || !videoPlayer.isConnected) {
+        videoPlayer = (videoContainer && videoContainer.querySelector && videoContainer.querySelector('video'))
+            || document.getElementById('video-player');
+        if (!videoPlayer) {
+            console.warn('initVideoJs: no <video> element available for', id);
+            return;
+        }
+    }
     // If a player already exists for this id, dispose it first to avoid duplicate streams/listeners
     if (players[id]) {
         k7InvalidateSidecar(players[id]);

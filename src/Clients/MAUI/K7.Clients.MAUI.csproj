@@ -10,6 +10,10 @@
     <TargetFrameworks Condition="'$(K7PublishPlatform)' == 'android'">net10.0-android</TargetFrameworks>
     <TargetFrameworks Condition="'$(K7PublishPlatform)' == 'windows'">net10.0-windows10.0.19041.0</TargetFrameworks>
     <TargetFrameworks Condition="'$(K7PublishPlatform)' == 'ios'">net10.0-ios</TargetFrameworks>
+    <!-- Linux desktop (GTK4 via dotnet/maui-labs) is a plain net10.0 TFM: no custom TFM, no MAUI
+         workload. Default on Linux hosts, opt-in elsewhere with -p:K7PublishPlatform=linux. -->
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('linux')) and '$(K7PublishPlatform)' == ''">net10.0</TargetFrameworks>
+    <TargetFrameworks Condition="'$(K7PublishPlatform)' == 'linux'">net10.0</TargetFrameworks>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- Uncomment to also build the tizen app. You will need to install tizen by following this: https://github.com/Samsung/Tizen.NET -->
     <!-- <TargetFrameworks>$(TargetFrameworks);net9.0-tizen</TargetFrameworks> -->
@@ -56,6 +60,61 @@
     <DefaultLanguage>en</DefaultLanguage>
     <NoWarn>$(NoWarn);NU1608</NoWarn>
   </PropertyGroup>
+
+  <!-- net10.0 = Linux GTK4 head. The MAUI SDK is not imported for this TFM (labs pattern), so the
+       Platforms folder filtering, implicit usings and static web asset copy are declared here. -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <UseMaui>false</UseMaui>
+    <EnableDefaultMauiResourceItems>false</EnableDefaultMauiResourceItems>
+    <DefaultItemExcludes>$(DefaultItemExcludes);Platforms\**</DefaultItemExcludes>
+    <DefineConstants>$(DefineConstants);LINUX</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <Compile Include="Platforms\Linux\**\*.cs" />
+    <!-- SingleProject targets (Controls.Build.Tasks) drop every Platforms/** compile item that is
+         not on this allow-list. Condition-gated so the other TFMs still exclude Platforms/Linux. -->
+    <MauiPlatformSpecificFolder Include="Platforms\Linux" />
+    <PackageReference Include="Microsoft.Maui.Platforms.Linux.Gtk4" />
+    <PackageReference Include="Microsoft.Maui.Platforms.Linux.Gtk4.Essentials" />
+    <PackageReference Include="Microsoft.Maui.Platforms.Linux.Gtk4.BlazorWebView" />
+    <!-- LibVLC 4 Direct Play (system libvlc, VLC 4 nightly). HLS stays Video.js in WebKitGTK. -->
+    <PackageReference Include="LibVLCSharp" />
+    <!-- Splash Lottie via Skottie into a Gtk.Picture (no SkiaSharp GTK handler). -->
+    <PackageReference Include="SkiaSharp.Skottie" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
+    <!-- Freedesktop app icon (mark on dark); LinuxNativeProtocol installs it as com.k7.maui in the
+         user hicolor theme so the desktop entry, dock and "Open with" show the K7 symbol. -->
+    <None Include="..\..\..\branding\icon.png"
+          Link="hicolor\512x512\apps\com.k7.maui.png"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+    <!-- Window icon: the labs host picks the newest file in hicolor/scalable/apps and uses its
+         name as the default icon name, so ship the composed mark there too (see MauiIcon Remove). -->
+    <None Include="..\..\..\branding\icon.png"
+          Link="hicolor\scalable\apps\com.k7.maui.png"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+    <!-- Same global usings the MAUI SDK adds on platform TFMs. -->
+    <Using Include="Microsoft.Extensions.DependencyInjection" />
+    <Using Include="Microsoft.Maui" />
+    <Using Include="Microsoft.Maui.Accessibility" />
+    <Using Include="Microsoft.Maui.ApplicationModel" />
+    <Using Include="Microsoft.Maui.ApplicationModel.Communication" />
+    <Using Include="Microsoft.Maui.ApplicationModel.DataTransfer" />
+    <Using Include="Microsoft.Maui.Authentication" />
+    <Using Include="Microsoft.Maui.Controls" />
+    <Using Include="Microsoft.Maui.Controls.Hosting" />
+    <Using Include="Microsoft.Maui.Controls.Xaml" />
+    <Using Include="Microsoft.Maui.Devices" />
+    <Using Include="Microsoft.Maui.Devices.Sensors" />
+    <Using Include="Microsoft.Maui.Dispatching" />
+    <Using Include="Microsoft.Maui.Graphics" />
+    <Using Include="Microsoft.Maui.Hosting" />
+    <Using Include="Microsoft.Maui.Media" />
+    <Using Include="Microsoft.Maui.Networking" />
+    <Using Include="Microsoft.Maui.Storage" />
+  </ItemGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net10.0-android|AnyCPU'">
     <AndroidCreatePackagePerAbi>True</AndroidCreatePackagePerAbi>
@@ -152,6 +211,143 @@
     <InternalsVisibleTo Include="K7.Clients.MAUI.SmokeTests" />
   </ItemGroup>
 
+  <!-- Linux: appicon.svg is only the background layer of the composed MAUI icon (Resizetizer
+       does not run here). Without this the labs host shows a plain dark square as window icon. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <MauiIcon Remove="Resources\AppIcon\appicon.svg" />
+  </ItemGroup>
+
   <Import Project="Platforms\Windows\LibVlcWindowsNative.targets" />
+
+  <!-- Linux: libvlc 4 bundle (tools/linux/bundle-libvlc.sh output, gitignored) copied next to the
+       app as libvlc/linux-x64, the counterpart of libvlc/win-x64 on Windows. Without it the client
+       falls back to a system VLC 4. Deb* properties feed the labs CreateDeb targets
+       (dotnet publish -r linux-x64 -p:CreateDeb=true). -->
+  <PropertyGroup>
+    <K7LinuxLibVlcDir Condition="'$(K7LinuxLibVlcDir)' == ''">$(MSBuildProjectDirectory)/libvlc/linux-x64</K7LinuxLibVlcDir>
+    <DebPackageName>k7</DebPackageName>
+    <DebSection>video</DebSection>
+    <DebMaintainer>K7 contributors &lt;noreply@github.com&gt;</DebMaintainer>
+    <DebHomepage>https://github.com/kaybi-gh/K7</DebHomepage>
+    <DebDescription>K7 media client (music, movies, TV shows)</DebDescription>
+    <DebCategories>AudioVideo;Video;Audio;Player;</DebCategories>
+    <!-- GTK4 / WebKitGTK host, the host libraries the bundled libvlc keeps using (see HOST_LIBS in
+         bundle-libvlc.sh), GStreamer for WebKitGTK media (music, HLS) and xdg-utils for k7://. -->
+    <DebDepends>libc6 (&gt;= 2.39), libstdc++6, libgtk-4-1 (&gt;= 4.12.0), libwebkitgtk-6.0-4, libpulse0, libdbus-1-3, libgnutls30t64 | libgnutls30, libssl3t64 | libssl3, libkrb5-3, libxml2, xdg-utils, gstreamer1.0-plugins-good, gstreamer1.0-plugins-bad, gstreamer1.0-libav, gstreamer1.0-pulseaudio, gstreamer1.0-gl</DebDepends>
+  </PropertyGroup>
+
+  <Target Name="K7CopyLibVlcLinuxNatives"
+          AfterTargets="CopyFilesToOutputDirectory"
+          Condition="'$(TargetFramework)' == 'net10.0' and Exists('$(K7LinuxLibVlcDir)/libvlc.so.12')">
+    <ItemGroup>
+      <_K7LibVlcLinuxFiles Include="$(K7LinuxLibVlcDir)/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_K7LibVlcLinuxFiles)"
+          DestinationFiles="@(_K7LibVlcLinuxFiles->'$(OutDir)libvlc/linux-x64/%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="K7PublishLibVlcLinuxNatives"
+          AfterTargets="Publish"
+          BeforeTargets="_PrepareDebStagingDir;_PrepareAppImageDir"
+          Condition="'$(TargetFramework)' == 'net10.0'">
+    <Message Importance="high"
+             Condition="!Exists('$(K7LinuxLibVlcDir)/libvlc.so.12')"
+             Text="K7: no libvlc bundle at $(K7LinuxLibVlcDir) (run tools/linux/bundle-libvlc.sh); Direct Play will need a system VLC 4" />
+    <ItemGroup Condition="Exists('$(K7LinuxLibVlcDir)/libvlc.so.12')">
+      <_K7LibVlcLinuxPublishFiles Include="$(K7LinuxLibVlcDir)/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_K7LibVlcLinuxPublishFiles)"
+          DestinationFiles="@(_K7LibVlcLinuxPublishFiles->'$(PublishDir)libvlc/linux-x64/%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <!-- The labs .desktop entry has no MimeType (k7:// callbacks) and no %u, and the labs icon copy
+       needs a MauiIcon item (removed for this TFM): rewrite both in the Deb staging tree. -->
+  <Target Name="K7PolishLinuxDeb"
+          AfterTargets="_GenerateDebDesktopFile;_CopyDebIcon"
+          BeforeTargets="CreateDeb"
+          Condition="'$(_DebEnabled)' == 'true'">
+    <PropertyGroup>
+      <_K7DebDesktopEntry>[Desktop Entry]
+Type=Application
+Name=K7
+Comment=$(DebDescription)
+Exec=$(DebPackageName) %u
+Icon=$(ApplicationId)
+Terminal=false
+StartupWMClass=$(ApplicationId)
+Categories=AudioVideo%3BVideo%3BAudio%3BPlayer%3B
+MimeType=x-scheme-handler/k7%3B
+Keywords=media%3Bmusic%3Bmovies%3Bseries%3B
+</_K7DebDesktopEntry>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(_DebStagingDir)/usr/share/applications/$(ApplicationId).desktop"
+                      Lines="$(_K7DebDesktopEntry)"
+                      Overwrite="true" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)/../../../branding/icon.png"
+          DestinationFiles="$(_DebStagingDir)/usr/share/icons/hicolor/512x512/apps/$(ApplicationId).png" />
+  </Target>
+
+  <!-- Linux: the GTK BlazorWebView serves wwwroot from the output folder (PhysicalFileProvider).
+       Without the MAUI SDK nothing turns static web assets (own wwwroot + RCL _content) into
+       app files, so copy them next to the exe on build and publish. -->
+  <Target Name="K7CopyStaticWebAssetsLinux"
+          AfterTargets="CopyFilesToOutputDirectory"
+          DependsOnTargets="ResolveProjectReferences;StaticWebAssetsPrepareForRun;StaticWebAssetsPrepareForPublish;LoadStaticWebAssetsPublishManifest"
+          Condition="'$(TargetFramework)' == 'net10.0'">
+    <ComputeStaticWebAssetsTargetPaths Assets="@(StaticWebAsset)" PathPrefix="wwwroot">
+      <Output TaskParameter="AssetsWithTargetPath" ItemName="_K7LinuxStaticWebAsset" />
+    </ComputeStaticWebAssetsTargetPaths>
+    <Copy SourceFiles="@(_K7LinuxStaticWebAsset)"
+          DestinationFiles="@(_K7LinuxStaticWebAsset->'$(OutDir)%(TargetPath)')"
+          SkipUnchangedFiles="true" />
+    <!-- The labs GTK scheme handler looks assets up with their query string: Blazor-ApexCharts
+         imports "./apexcharts.esm.js?ver=x.y.z" from its module and gets a 404. -->
+    <ItemGroup>
+      <_K7LinuxVersionedModule Include="@(_K7LinuxStaticWebAsset->'$(OutDir)%(TargetPath)')"
+                               Condition="$([System.String]::new('%(TargetPath)').Contains('Blazor-ApexCharts')) And $([System.String]::new('%(TargetPath)').EndsWith('.js'))" />
+    </ItemGroup>
+    <K7StripModuleVersionQuery Files="@(_K7LinuxVersionedModule)" />
+  </Target>
+
+  <UsingTask TaskName="K7StripModuleVersionQuery"
+             TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <Files ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.Text.RegularExpressions" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        foreach (var file in Files)
+        {
+            var path = file.ItemSpec;
+            if (!File.Exists(path))
+                continue;
+
+            var text = File.ReadAllText(path);
+            var stripped = Regex.Replace(text, @"(\.js)\?ver=[0-9A-Za-z.\-]+", "$1");
+            if (!string.Equals(text, stripped, StringComparison.Ordinal))
+                File.WriteAllText(path, stripped);
+        }
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="K7PublishStaticWebAssetsLinux"
+          AfterTargets="Publish"
+          BeforeTargets="_PrepareDebStagingDir;_PrepareAppImageDir"
+          Condition="'$(TargetFramework)' == 'net10.0'">
+    <Copy SourceFiles="@(_K7LinuxStaticWebAsset)"
+          DestinationFiles="@(_K7LinuxStaticWebAsset->'$(PublishDir)%(TargetPath)')"
+          SkipUnchangedFiles="true" />
+    <ItemGroup>
+      <_K7LinuxVersionedPublishModule Include="@(_K7LinuxStaticWebAsset->'$(PublishDir)%(TargetPath)')"
+                                      Condition="$([System.String]::new('%(TargetPath)').Contains('Blazor-ApexCharts')) And $([System.String]::new('%(TargetPath)').EndsWith('.js'))" />
+    </ItemGroup>
+    <K7StripModuleVersionQuery Files="@(_K7LinuxVersionedPublishModule)" />
+  </Target>
 
 </Project>

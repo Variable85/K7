@@ -306,6 +306,8 @@ public sealed partial class NativeVideoPlayerOverlay : Grid
                 ClearStartFailure();
                 AttachSidecarLayer();
                 Attach();
+                // The track may have been selected before the overlay was active (Direct Play start).
+                RefreshSidecarSubtitles();
                 _awaitingFirstFrame = true;
                 _userPaused = false;
 #if ANDROID
@@ -355,7 +357,7 @@ public sealed partial class NativeVideoPlayerOverlay : Grid
 
     private bool _awaitingFirstFrame = true;
     private bool _seekSpinnerActive;
-#if WINDOWS
+#if WINDOWS || LINUX
     private bool _seekSawBuffering;
 #endif
     private bool _userPaused;
@@ -427,6 +429,10 @@ public sealed partial class NativeVideoPlayerOverlay : Grid
         });
     }
 
+#if LINUX
+    private double _seekSpinnerClockBaseline = double.NaN;
+#endif
+
     /// <summary>Spinner only while a seek rebuffers. Keeps the last decoded frame.</summary>
     public void ShowSeekSpinner()
     {
@@ -436,7 +442,10 @@ public sealed partial class NativeVideoPlayerOverlay : Grid
                 return;
 
             _seekSpinnerActive = true;
-#if WINDOWS
+#if LINUX
+            _seekSpinnerClockBaseline = double.NaN;
+#endif
+#if WINDOWS || LINUX
             _seekSawBuffering = false;
 #endif
             _loadingVeil.IsVisible = false;
@@ -454,7 +463,7 @@ public sealed partial class NativeVideoPlayerOverlay : Grid
                 return;
 
             _seekSpinnerActive = false;
-#if WINDOWS
+#if WINDOWS || LINUX
             _seekSawBuffering = false;
 #endif
             if (_awaitingFirstFrame)
@@ -1298,7 +1307,15 @@ public sealed partial class NativeVideoPlayerOverlay : Grid
         button.BorderWidth = 0;
         button.TextColor = Colors.White;
         button.FontFamily = NativePlayerGlyphs.FontFamily;
+#if LINUX
+        // GTK reports scale 1 under WSLg / VMs whatever the monitor: scale like WinUI would.
+        // The k7-glyph class lets LinuxOverlayTheme size the label whatever the theme does.
+        button.FontSize = Platforms.Linux.LinuxUiScale.Px(20);
+        button.HandlerChanged += (_, _) =>
+            (button.Handler?.PlatformView as Gtk.Widget)?.AddCssClass("k7-glyph");
+#else
         button.FontSize = 20;
+#endif
         button.Padding = new Thickness(10, 6);
         button.CornerRadius = 8;
         button.FontAutoScalingEnabled = false;
@@ -1504,7 +1521,7 @@ public sealed partial class NativeVideoPlayerOverlay : Grid
 
     private bool DecoderOwnsFirstFrame()
     {
-#if WINDOWS
+#if WINDOWS || LINUX
         return WindowsVideoPlayback.ShouldUseLibVlc(_player.Source?.MimeType, _player.Source?.Url);
 #else
         return true;
@@ -1526,7 +1543,7 @@ public sealed partial class NativeVideoPlayerOverlay : Grid
                     decoderOwnsFirstFrame: DecoderOwnsFirstFrame()))
                 NotifyFirstFrameReady();
 
-#if WINDOWS
+#if WINDOWS || LINUX
             if (state == PlaybackState.Buffering && _seekSpinnerActive)
                 _seekSawBuffering = true;
 
@@ -1587,6 +1604,19 @@ public sealed partial class NativeVideoPlayerOverlay : Grid
             }
 
             TryHideRemuxSeekSpinnerFromBuffer();
+#if LINUX
+            // WebKitGTK Video.js seeks go seeking -> seeked -> playing without a Buffering
+            // state, so the Windows "saw buffering" rule never fires: the clock advancing
+            // past the landing point is the proof playback resumed. LibVLC holds the
+            // published clock on the pin until frames flow, so this does not fire early.
+            if (_seekSpinnerActive && !_awaitingFirstFrame && time > 0)
+            {
+                if (double.IsNaN(_seekSpinnerClockBaseline))
+                    _seekSpinnerClockBaseline = time;
+                else if (time - _seekSpinnerClockBaseline >= 0.75)
+                    HideSeekSpinner();
+            }
+#endif
             UpdateSkipSegment(time);
             // Sidecar VTT follows the held resume clock; do not paint cues over the veil.
             // Android: Exo SubtitleView owns text - no XAML sidecar.
@@ -2292,9 +2322,29 @@ public sealed partial class NativeVideoPlayerOverlay : Grid
             return;
 
         CancelVolumeHoverHide();
-        _volumeHoverHideTimer = new Timer(220) { AutoReset = false };
+#if LINUX
+        // Crossing the gap between the bar and the popover under GTK takes longer than the
+        // WinUI timing allows (scaled glyph bar, synthesized crossings on relayout).
+        const double volumeHoverGraceMs = 650;
+#else
+        const double volumeHoverGraceMs = 220;
+#endif
+        _volumeHoverHideTimer = new Timer(volumeHoverGraceMs) { AutoReset = false };
         _volumeHoverHideTimer.Elapsed += (_, _) =>
-            MainThread.BeginInvokeOnMainThread(() => SetVolumeOpen(false));
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+#if LINUX
+                // GTK synthesizes leave/enter pairs on every layout pass (the popover showing
+                // is one): only hide once the pointer really left both widgets.
+                if (Platforms.Linux.LinuxGestureBridge.IsPointerOver(_volumeButton)
+                    || Platforms.Linux.LinuxGestureBridge.IsPointerOver(_volumePopover))
+                {
+                    ScheduleVolumeHoverHide();
+                    return;
+                }
+#endif
+                SetVolumeOpen(false);
+            });
         _volumeHoverHideTimer.Start();
     }
 
@@ -2404,7 +2454,13 @@ public sealed partial class NativeVideoPlayerOverlay : Grid
         _hudTimer.Start();
     }
 
-    private void OnDesktopPointerMoved(object? sender, PointerEventArgs e)
+    private void OnDesktopPointerMoved(object? sender, PointerEventArgs e) => NotifyDesktopPointerMoved();
+
+    /// <summary>
+    /// Desktop cursor activity from the host (Linux routes window motion here because GTK
+    /// pointer gestures on the overlay are not guaranteed): reveal or keep the chrome.
+    /// </summary>
+    internal void NotifyDesktopPointerMoved()
     {
         if (!IsVisible || !IsDesktopLike() || _inputModalActive || IsNextEpisodeVisible)
             return;
@@ -2546,7 +2602,7 @@ public sealed partial class NativeVideoPlayerOverlay : Grid
         }
     }
 
-#if ANDROID || WINDOWS
+#if ANDROID || WINDOWS || LINUX
 #if ANDROID
     private void TryApplyAndroidSubtitleStyle()
     {
@@ -2556,7 +2612,7 @@ public sealed partial class NativeVideoPlayerOverlay : Grid
 #if WINDOWS
     private void TryApplyWindowsSubtitleStyle()
     {
-        MainThread.BeginInvokeOnMainThread(() => FindBlazorPage()?.ApplyPendingWindowsSubtitleStyle());
+        MainThread.BeginInvokeOnMainThread(() => FindBlazorPage()?.ApplyPendingDesktopSubtitleStyle());
     }
 #endif
 

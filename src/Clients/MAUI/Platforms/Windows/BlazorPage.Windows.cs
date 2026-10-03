@@ -26,15 +26,11 @@ public partial class BlazorPage
     private TypedEventHandler<object, WindowEventArgs>? _windowsClosedHandler;
     private TypedEventHandler<AppWindow, AppWindowClosingEventArgs>? _windowsClosingHandler;
     private AppWindow? _windowsAppWindow;
-    private WindowsVlcVideoPlayer? _vlcPlayer;
-    private bool _vlcEventsHooked;
-    private string? _directTrackOverrideUrl;
 
     partial void InitializePlayerPlatform()
     {
         DisableNativeAudioElements();
-        _playerService.SwitchAudioTrackRequested += OnSwitchAudioTrack;
-        _playerService.SwitchSubtitleTrackRequested += OnSwitchSubtitleTrack;
+        InitializeDesktopVlcRequests();
         _playerService.EnterFullScreenRequested += OnWindowsEnterFullScreen;
         _playerService.ExitFullScreenRequested += OnWindowsExitFullScreen;
         // Attach Closing before first play so exit during Direct Play always tears down LibVLC.
@@ -52,7 +48,7 @@ public partial class BlazorPage
         }
         catch
         {
-            StopWindowsVlc();
+            StopDesktopVlc();
         }
 
         _vlcPlayer = null;
@@ -61,19 +57,18 @@ public partial class BlazorPage
         DetachWindowsCloseHandler();
     }
 
-    private void DisposeWindowsVlcPlayer()
-    {
-        try
-        {
-            _vlcPlayer?.Dispose();
-        }
-        catch (Exception ex)
-        {
-            VlcPlayerLog.Warn("vlc dispose on close " + ex.GetType().Name);
-        }
+    private partial IDesktopVlcVideoPlayer CreateDesktopVlcPlayer() => new WindowsVlcVideoPlayer(RootGrid);
 
-        _vlcPlayer = null;
-        _vlcEventsHooked = false;
+    partial void OnDesktopVlcSessionStarted()
+    {
+        // Reset any leftover mixer attenuation from older builds. Volume is software-only (0-200).
+        WindowsAppAudioVolume.TrySet(1.0);
+    }
+
+    partial void OnDesktopVlcSessionStopped()
+    {
+        // Reset leftover mixer gain so a later Direct session starts at unity (software gain only).
+        WindowsAppAudioVolume.TrySet(1.0);
     }
 
     protected override void OnHandlerChanged()
@@ -84,7 +79,7 @@ public partial class BlazorPage
         EnsureWindowsCloseHandler();
     }
 
-    partial void ConfigureWindowsVideoPlayerLayout()
+    partial void ConfigureDesktopVideoPlayerLayout()
     {
         SyncWindowsStreamAuthContext();
         DisableNativeAudioElements();
@@ -128,517 +123,12 @@ public partial class BlazorPage
             TryEvaluateWebViewJs(
                 "try{if(window.blankK7VideoSurfaces)blankK7VideoSurfaces();"
                 + "if(window.K7&&K7.setNativePlayerActive)K7.setNativePlayerActive(false,false);}catch(e){}");
-            StopWindowsVlc();
+            StopDesktopVlc();
         }
     }
 
     private static void DisableNativeAudioElements()
     {
-    }
-
-    internal bool IsWindowsVlcActive => _vlcPlayer?.IsActive == true;
-
-    internal void SetWindowsVlcSurfaceVisible(bool visible) =>
-        _vlcPlayer?.SetSurfaceVisible(visible);
-
-    internal static bool ShouldUseWindowsVlc(PlayerSource? source) =>
-        source is not null
-        && WindowsVideoPlayback.ShouldUseLibVlc(source.MimeType, source.Url);
-
-    internal bool TryOpenWindowsVlc(PlayerSource source)
-    {
-        if (!ShouldUseWindowsVlc(source) || string.IsNullOrEmpty(source.Url))
-            return false;
-
-        EnsureWindowsCloseHandler();
-        // WebView2 keeps a HWND compositor on top of LibVLC (ZIndex does not win).
-        // Dispose Video.js and hide the WebView before Play or Direct audio starts
-        // under a leftover HLS frame.
-        TryEvaluateWebViewJs(
-            "try{if(window.blankK7VideoSurfaces)blankK7VideoSurfaces();"
-            + "if(window.K7&&K7.setNativePlayerActive)K7.setNativePlayerActive(true,false);}catch(e){}");
-        HideBlazorWebViewForNativeVideo();
-        NativePlayer.IsVisible = false;
-        try
-        {
-            NativePlayer.Stop();
-            NativePlayer.Source = null;
-        }
-        catch
-        {
-        }
-
-        _vlcPlayer ??= new WindowsVlcVideoPlayer(RootGrid);
-        HookWindowsVlcOnce();
-        VlcSubtitleStyle.SetSettings(
-            _playerService.VideoPlayerUxSettings ?? VlcSubtitleStyle.GetSettings());
-
-        var startSeconds = source.PendingSeekTime is double pending && pending > 1
-            ? pending
-            : 0;
-        _vlcPlayer.Play(
-            source.Url,
-            ResolveNativePlayerAuthorizationHeader(),
-            startSeconds,
-            ResolveVlcAudioOrdinal(),
-            // Text SRT/VTT: overlay owns paint - never pass a VLC :sub-track ordinal.
-            _playerService.SelectedSubtitleTrack is { IsTextBased: true }
-                ? null
-                : ResolveVlcSubtitleOrdinal(),
-            hlsAudioTrackIndex: null,
-            _playerService.Duration);
-        if (_playerService.SelectedSubtitleTrack is { IsTextBased: true })
-            _vlcPlayer.SetOverlayOwnsTextSubs(true);
-        // Reset any leftover mixer attenuation from older builds; volume is software-only (0-200).
-        WindowsAppAudioVolume.TrySet(1.0);
-        _vlcPlayer.SetVolume(_playerService.Volume);
-        _vlcPlayer.SetMuted(_playerService.IsMuted);
-        _vlcPlayer.SetRate(_playerService.PlaybackRate > 0 ? _playerService.PlaybackRate : 1);
-        _vlcPlayer.ApplyAspect(_playerService.AspectRatio);
-
-        var kind = LocalPlaybackUrl.IsLocalFile(source.Url)
-            ? "file"
-            : StreamingSourceKind.IsHls(source.MimeType, source.Url)
-                ? "hls"
-                : "direct";
-        if (startSeconds > 1)
-            _playerService.CurrentTime = startSeconds;
-
-        _playerService.PlaybackState = Server.Domain.Enums.PlaybackState.Buffering;
-        VlcPlayerLog.Info(
-            "bind kind="
-            + kind
-            + " pipeline=vlc url="
-            + VlcPlayerLog.SummarizeUrl(source.Url)
-            + " mime="
-            + (source.MimeType ?? "-")
-            + " quality="
-            + (_playerService.SelectedQuality?.Label ?? "-")
-            + " start="
-            + startSeconds.ToString("F1")
-            + "s");
-        return true;
-    }
-
-    /// <summary>
-    /// Stops and fully disposes LibVLC so Direct and Video.js never run in parallel.
-    /// Next Direct Play recreates a fresh <see cref="WindowsVlcVideoPlayer"/>.
-    /// </summary>
-    internal void StopWindowsVlc()
-    {
-        var player = _vlcPlayer;
-        if (player is null)
-            return;
-
-        // Drop the field first so overlay/control handlers cannot touch a half-disposed engine
-        // during a fast Direct -> HLS quality swap.
-        _vlcPlayer = null;
-        _vlcEventsHooked = false;
-
-        try
-        {
-            player.Stop();
-        }
-        catch (Exception ex)
-        {
-            VlcPlayerLog.Warn("vlc pipeline stop " + ex.GetType().Name);
-        }
-
-        try
-        {
-            player.Dispose();
-        }
-        catch (Exception ex)
-        {
-            VlcPlayerLog.Warn("vlc pipeline dispose " + ex.GetType().Name);
-        }
-
-        // Reset leftover mixer gain so a later Direct session starts at unity (software gain only).
-        WindowsAppAudioVolume.TrySet(1.0);
-    }
-
-    internal bool IsWindowsWebVideoActive =>
-        _playerService.Source is not null
-        && WindowsVideoPlayback.ShouldUseWebVideoPlayer(
-            _playerService.Source.MimeType,
-            _playerService.Source.Url);
-
-    internal bool TryHandleWindowsVlcPlay()
-    {
-        if (!IsWindowsVlcActive)
-            return false;
-
-        _vlcPlayer!.Resume();
-        return true;
-    }
-
-    internal bool TryHandleWindowsVlcPause()
-    {
-        if (!IsWindowsVlcActive)
-            return false;
-
-        _vlcPlayer!.Pause();
-        return true;
-    }
-
-    internal bool TryHandleWindowsVlcStop()
-    {
-        if (!IsWindowsVlcActive)
-            return false;
-
-        StopWindowsVlc();
-        return true;
-    }
-
-    internal bool TryHandleWindowsVlcMute(bool muted)
-    {
-        if (!IsWindowsVlcActive)
-            return false;
-
-        _vlcPlayer!.SetMuted(muted);
-        return true;
-    }
-
-    internal bool TryHandleWindowsVlcVolume(double volume)
-    {
-        if (!IsWindowsVlcActive)
-            return false;
-
-        // IPlayerService volume -> LibVLC software gain only (parity with Video.js element volume).
-        _vlcPlayer!.SetVolume(volume);
-        return true;
-    }
-
-    internal bool TryHandleWindowsVlcRate(double rate)
-    {
-        if (!IsWindowsVlcActive)
-            return false;
-
-        _vlcPlayer!.SetRate(rate);
-        return true;
-    }
-
-    internal bool TryHandleWindowsVlcAspect(AspectRatioMode mode)
-    {
-        if (!IsWindowsVlcActive)
-            return false;
-
-        _vlcPlayer!.ApplyAspect(mode);
-        return true;
-    }
-
-    internal void UpdateWindowsVlcAuthorization()
-    {
-        _vlcPlayer?.UpdateAuthorization(ResolveNativePlayerAuthorizationHeader());
-    }
-
-    internal void ApplyPendingWindowsSubtitleStyle()
-    {
-        if (IsWindowsVlcActive)
-            _vlcPlayer?.RefreshSubtitleStyle();
-    }
-
-    internal void ReleaseSidecarTextSubtitles() =>
-        _vlcPlayer?.SetOverlayOwnsTextSubs(false);
-
-    internal void NotifySidecarTextSubtitles(bool ready)
-    {
-        if (!IsWindowsVlcActive)
-            return;
-
-        _vlcPlayer!.SetOverlayOwnsTextSubs(ready);
-    }
-
-    internal bool TryGetWindowsVlcMediaSeconds(out double seconds)
-    {
-        seconds = 0;
-        if (!IsWindowsVlcActive)
-            return false;
-
-        seconds = _vlcPlayer!.PositionSeconds;
-        return true;
-    }
-
-    private double GetWindowsVlcPositionSeconds() =>
-        TryGetWindowsVlcMediaSeconds(out var seconds) ? seconds : 0;
-
-    private Task SeekWindowsVideoAsync(double positionSeconds) =>
-        MainThread.InvokeOnMainThreadAsync(() =>
-        {
-            if (!IsWindowsVlcActive)
-                return;
-
-            var resumePlayback = _playerService.PlaybackState
-                is Server.Domain.Enums.PlaybackState.Playing
-                or Server.Domain.Enums.PlaybackState.Buffering;
-
-            var targetSeconds = Math.Max(0, positionSeconds);
-            // Prefer metadata duration: VLC Length can be 0/short around reopen.
-            var knownDuration = Math.Max(_playerService.Duration, _vlcPlayer!.DurationSeconds);
-            if (knownDuration > 1)
-            {
-                _vlcPlayer.PinDuration(knownDuration);
-                targetSeconds = Math.Min(targetSeconds, knownDuration);
-            }
-
-            _vlcPlayer.Seek(targetSeconds);
-            _playerService.CurrentTime = targetSeconds;
-            if (knownDuration > 1 && _playerService.Duration <= 1)
-                _playerService.Duration = knownDuration;
-            if (resumePlayback)
-                _vlcPlayer.Resume();
-        });
-
-    private void HookWindowsVlcOnce()
-    {
-        if (_vlcPlayer is null || _vlcEventsHooked)
-            return;
-
-        _vlcEventsHooked = true;
-        _vlcPlayer.Playing += OnWindowsVlcPlaying;
-        _vlcPlayer.Paused += OnWindowsVlcPaused;
-        _vlcPlayer.Ended += OnWindowsVlcEnded;
-        _vlcPlayer.EncounteredError += OnWindowsVlcError;
-        _vlcPlayer.PositionChanged += OnWindowsVlcPosition;
-        _vlcPlayer.DurationChanged += OnWindowsVlcDuration;
-        _vlcPlayer.FirstFrame += OnWindowsVlcFirstFrame;
-        _vlcPlayer.Reopening += OnWindowsVlcReopening;
-    }
-
-    private void OnWindowsVlcPlaying()
-    {
-        if (!IsWindowsVlcActive)
-            return;
-
-        _playerService.PlaybackState = Server.Domain.Enums.PlaybackState.Playing;
-        if (_playerService.Source is { PendingSeekTime: double pending } source
-            && pending > 1
-            && Math.Abs(_vlcPlayer!.PositionSeconds - pending) <= 30)
-        {
-            source.PendingSeekTime = null;
-        }
-    }
-
-    private void OnWindowsVlcPaused()
-    {
-        if (!IsWindowsVlcActive)
-            return;
-
-        _playerService.PlaybackState = NativeVideoPlaybackEnd.PromoteIfMediaEnded(
-            Server.Domain.Enums.PlaybackState.Paused,
-            engineIsPlaying: false,
-            isOpeningSource: false,
-            isVisible: _playerService.IsVisible,
-            durationSeconds: Math.Max(_playerService.Duration, _vlcPlayer?.DurationSeconds ?? 0),
-            positionSeconds: _vlcPlayer?.PositionSeconds ?? _playerService.CurrentTime);
-    }
-
-    private void OnWindowsVlcEnded()
-    {
-        if (IsWindowsVlcActive)
-            _playerService.PlaybackState = Server.Domain.Enums.PlaybackState.Ended;
-    }
-
-    private void OnWindowsVlcError(string detail)
-    {
-        if (!IsWindowsVlcActive)
-            return;
-
-        VlcPlayerLog.Warn("vlc playback failed " + VlcPlayerLog.SummarizeUrl(detail));
-        if (detail.Contains("401", StringComparison.Ordinal)
-            || detail.Contains("Unauthorized", StringComparison.OrdinalIgnoreCase))
-        {
-            _ = TryRecoverNativeVideoAuthAsync("vlc " + detail);
-            return;
-        }
-
-        ReportNativePlayerMediaFailedToServer("vlc " + detail);
-    }
-
-    private void OnWindowsVlcPosition(double seconds)
-    {
-        if (!IsWindowsVlcActive || seconds < 0)
-            return;
-
-        _playerService.CurrentTime = seconds;
-    }
-
-    private void OnWindowsVlcDuration(double seconds)
-    {
-        if (!IsWindowsVlcActive || seconds <= 0)
-            return;
-
-        // Once metadata duration is known, never replace it with VLC Length.
-        var known = _playerService.Duration;
-        if (known > 1)
-        {
-            if (Math.Abs(seconds - known) > 0.5 && seconds >= known * 0.9 && seconds <= known * 1.1)
-                _playerService.Duration = Math.Max(known, seconds);
-            return;
-        }
-
-        _playerService.Duration = seconds;
-    }
-
-    private void OnWindowsVlcReopening()
-    {
-        // Seek/audio reopen must not flash a zero duration on the seekbar.
-        if (_playerService.Duration > 1)
-            _vlcPlayer?.PinDuration(_playerService.Duration);
-        _nativeOverlay?.ShowTransientVeil();
-    }
-
-    private void OnWindowsVlcFirstFrame()
-    {
-        _nativeOverlay?.NotifyFirstFrameReady();
-        var url = _playerService.Source?.Url;
-        if (_directTrackOverrideUrl == url)
-            return;
-
-        _directTrackOverrideUrl = url;
-        try
-        {
-            _vlcPlayer?.LogEsTracks();
-        }
-        catch (InvalidOperationException)
-        {
-            // LibVLCSharp can expose null MediaTrack entries before ES are ready.
-        }
-    }
-
-    private void OnSwitchAudioTrack(string trackName)
-    {
-        MainThread.BeginInvokeOnMainThread(() =>
-        {
-            if (IsWindowsVlcActive)
-                TrySwitchVlcAudioTrack(trackName, attempt: 0);
-        });
-    }
-
-    private void OnSwitchSubtitleTrack(string? slug)
-    {
-        MainThread.BeginInvokeOnMainThread(() =>
-        {
-            if (IsWindowsVlcActive)
-                TrySwitchVlcSubtitleTrack(slug, attempt: 0);
-        });
-    }
-
-    private int? ResolveVlcAudioOrdinal()
-    {
-        if (_playerService.SelectedAudioTrack is not { } audio)
-            return null;
-
-        var ordered = _playerService.AudioTracks.OrderBy(t => t.Index).ToList();
-        var index = ordered.FindIndex(t => t.Index == audio.Index);
-        return index >= 0 ? index : null;
-    }
-
-    /// <summary>
-    /// VLC :sub-track ordinal among image/PGS ES only. Text tracks are overlay-owned
-    /// and must not inflate the ordinal into VLC's Text list.
-    /// </summary>
-    private int? ResolveVlcSubtitleOrdinal()
-    {
-        if (_playerService.SelectedSubtitleTrack is not { } sub || sub.IsTextBased)
-            return null;
-
-        var ordered = _playerService.SubtitleTracks
-            .Where(t => !t.IsTextBased)
-            .OrderBy(t => t.Index)
-            .ToList();
-        var index = ordered.FindIndex(t => t.Index == sub.Index);
-        return index >= 0 ? index : null;
-    }
-
-    private void TrySwitchVlcAudioTrack(string trackName, int attempt)
-    {
-        if (!IsWindowsVlcActive)
-            return;
-
-        if (!trackName.StartsWith("audio-", StringComparison.OrdinalIgnoreCase)
-            || !int.TryParse(trackName.AsSpan(6), out var fileStreamIndex))
-        {
-            VlcPlayerLog.Warn("vlc audio switch bad slug=" + trackName);
-            return;
-        }
-
-        var ordered = _playerService.AudioTracks.OrderBy(t => t.Index).ToList();
-        var index = ordered.FindIndex(t => t.Index == fileStreamIndex);
-        if (index < 0)
-        {
-            VlcPlayerLog.Warn(
-                "vlc audio switch missing stream="
-                + fileStreamIndex.ToString(CultureInfo.InvariantCulture));
-            if (attempt < 5)
-                ScheduleVlcTrackRetry(() => TrySwitchVlcAudioTrack(trackName, attempt + 1));
-            return;
-        }
-
-        var catalog = ordered[index];
-        if (_vlcPlayer!.TrySelectAudio(index, catalog.Language, catalog.Name))
-            return;
-
-        if (attempt < 5)
-            ScheduleVlcTrackRetry(() => TrySwitchVlcAudioTrack(trackName, attempt + 1));
-    }
-
-    private void TrySwitchVlcSubtitleTrack(string? slug, int attempt)
-    {
-        if (!IsWindowsVlcActive)
-            return;
-
-        if (slug is null)
-        {
-            _vlcPlayer!.TrySelectSubtitle(null, null, null);
-            return;
-        }
-
-        // Text SRT/VTT: XAML sidecar owns paint + live style. Do not select VLC SPU.
-        if (_playerService.SelectedSubtitleTrack is { IsTextBased: true })
-        {
-            _vlcPlayer!.TrySelectSubtitle(null, null, null);
-            _vlcPlayer.SetOverlayOwnsTextSubs(true);
-            return;
-        }
-
-        if (!slug.StartsWith("sub-", StringComparison.OrdinalIgnoreCase)
-            || !int.TryParse(slug.AsSpan(4), out var fileStreamIndex))
-        {
-            VlcPlayerLog.Warn("vlc sub switch bad slug=" + slug);
-            return;
-        }
-
-        var imageTracks = _playerService.SubtitleTracks
-            .Where(t => !t.IsTextBased)
-            .OrderBy(t => t.Index)
-            .ToList();
-        var index = imageTracks.FindIndex(t => t.Index == fileStreamIndex);
-        if (index < 0)
-        {
-            VlcPlayerLog.Warn(
-                "vlc sub switch missing stream="
-                + fileStreamIndex.ToString(CultureInfo.InvariantCulture));
-            if (attempt < 5)
-                ScheduleVlcTrackRetry(() => TrySwitchVlcSubtitleTrack(slug, attempt + 1));
-            return;
-        }
-
-        var catalog = imageTracks[index];
-        if (_vlcPlayer!.TrySelectSubtitle(index, catalog.Language, catalog.Name))
-            return;
-
-        if (attempt < 5)
-            ScheduleVlcTrackRetry(() => TrySwitchVlcSubtitleTrack(slug, attempt + 1));
-    }
-
-    private static void ScheduleVlcTrackRetry(Action retry)
-    {
-        _ = Task.Run(async () =>
-        {
-            await Task.Delay(250);
-            MainThread.BeginInvokeOnMainThread(retry);
-        });
     }
 
     private void EnsureWindowsEscapeHandler()

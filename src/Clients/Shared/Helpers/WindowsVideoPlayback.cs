@@ -1,13 +1,13 @@
 namespace K7.Clients.Shared.Helpers;
 
 /// <summary>
-/// Windows MAUI: LibVLC for muxed Direct Play; Video.js for HLS transcode (WebView2).
-/// Web WASM always uses Video.js. See docs/dev/video-playback.md.
+/// Windows and Linux MAUI: LibVLC for muxed Direct Play; Video.js for HLS transcode
+/// (WebView2 / WebKitGTK). Web WASM always uses Video.js. See docs/dev/video-playback.md.
 /// </summary>
 public static class WindowsVideoPlayback
 {
     /// <summary>
-    /// True when the current stream should decode in WebView2 Video.js (HLS transcode).
+    /// True when the current stream should decode in the WebView Video.js (HLS transcode).
     /// </summary>
     public static bool ShouldUseWebVideoPlayer(string? mimeType, string? url) =>
         StreamingSourceKind.IsHls(mimeType, url);

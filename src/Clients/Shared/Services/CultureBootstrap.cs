@@ -8,6 +8,13 @@ namespace K7.Clients.Shared.Services;
 
 public static class CultureBootstrap
 {
+    /// <summary>
+    /// Host hook applied to the resolved culture before it becomes current. Linux GTK uses it to
+    /// keep a dot decimal separator (the GTK handlers format CSS numbers with the current culture).
+    /// Null everywhere else.
+    /// </summary>
+    public static Func<CultureInfo, CultureInfo>? CultureAdjuster { get; set; }
+
     public static async Task InitializeAsync(
         IJSRuntime js,
         IServerInfoService serverInfoService,
@@ -49,6 +56,9 @@ public static class CultureBootstrap
             return;
 
         var culture = CultureInfo.GetCultureInfo(language);
+        if (CultureAdjuster is not null)
+            culture = CultureAdjuster(culture);
+
         CultureInfo.DefaultThreadCurrentCulture = culture;
         CultureInfo.DefaultThreadCurrentUICulture = culture;
         CultureInfo.CurrentCulture = culture;

@@ -15,7 +15,7 @@ namespace K7.Clients.MAUI.Platforms.Windows;
 /// LibVLC 4 video surface for Windows Direct Play and local files.
 /// Windows HLS transcode uses Video.js in WebView2 (not this player).
 /// </summary>
-internal sealed class WindowsVlcVideoPlayer : IDisposable
+internal sealed class WindowsVlcVideoPlayer : IDesktopVlcVideoPlayer
 {
     private readonly Grid _host;
     private readonly VideoView _videoView;

@@ -1,13 +1,32 @@
 namespace K7.Clients.MAUI.Playback;
 
 /// <summary>
-/// LibVLC Direct Play helpers. Logging hooks are intentionally no-ops.
+/// LibVLC Direct Play helpers. Logging hooks are no-ops except on Linux, where the GTK host
+/// has no debugger attached in practice: lines go to stderr (terminal / journal) as "K7 VLC".
 /// </summary>
 internal static class VlcPlayerLog
 {
-    public static void Info(string message) => _ = message;
+    public static void Info(string message) => Emit("info", message);
 
-    public static void Warn(string message) => _ = message;
+    public static void Warn(string message) => Emit("warn", message);
+
+    private static void Emit(string level, string message)
+    {
+#if LINUX
+        var line = "K7 VLC " + level + " " + message;
+        System.Diagnostics.Debug.WriteLine(line);
+        try
+        {
+            Console.Error.WriteLine(line);
+        }
+        catch
+        {
+        }
+#else
+        _ = level;
+        _ = message;
+#endif
+    }
 
     public static bool IsExpectedClientDisconnect(Exception ex)
     {

@@ -768,6 +768,9 @@ var SpatialNav = (function () {
         if (key === 'b' || key === 'B' || code === 'KeyB') return false;
         if (keyCode === 13 || keyCode === 23 || keyCode === 66) return true;
         if (key === 'Enter' || key === 'NumpadEnter' || key === 'Select' || key === 'DpadCenter') return true;
+        // `code` is a physical-key hint and can be wrong: WebKitGTK under WSLg/RDP reports
+        // ArrowDown as code=NumpadEnter. Only trust it when `key` did not identify the key.
+        if (key !== '' && key !== 'Unidentified') return false;
         if (code === 'Enter' || code === 'NumpadEnter' || code === 'Select' || code === 'DpadCenter') return true;
         return false;
     }

@@ -1,4 +1,4 @@
-#if WINDOWS
+#if WINDOWS || LINUX
 using System.Globalization;
 using System.Text;
 using LibVLCSharp;

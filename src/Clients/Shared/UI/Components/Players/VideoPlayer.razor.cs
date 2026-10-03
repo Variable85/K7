@@ -229,7 +229,10 @@ public partial class VideoPlayer : IAsyncDisposable
         }
     });
 
-    private void OnVisibilityChanged()
+    // Raised from the host UI thread. On the GTK (maui-labs) host the Blazor renderer runs on
+    // its own dispatcher thread, so a direct StateHasChanged throws and the shell is never
+    // re-rendered (black .video-main left behind after closing an HLS session).
+    private void OnVisibilityChanged() => InvokeAsync(() =>
     {
         if (!PlayerService.IsVisible)
             HideWebVideoSurface();
@@ -238,7 +241,7 @@ public partial class VideoPlayer : IAsyncDisposable
 
         StateHasChanged();
         SyncNativePlayerShellCss();
-    }
+    }).FireAndForget();
 
     private void ShowWebVideoSurface()
     {

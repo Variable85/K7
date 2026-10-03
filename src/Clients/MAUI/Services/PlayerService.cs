@@ -1005,9 +1005,9 @@ internal class PlayerService(
 
     private bool TryPromoteDirectToHls()
     {
-        // Windows HLS is Video.js (MSE); Android LibVLC needs video+audio CODECS.
+        // Windows / Linux HLS is Video.js (MSE); Android LibVLC needs video+audio CODECS.
         var videoJsCompatible =
-#if WINDOWS
+#if WINDOWS || LINUX
             true;
 #else
             false;
