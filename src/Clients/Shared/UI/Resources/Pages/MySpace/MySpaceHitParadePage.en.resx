@@ -19,7 +19,7 @@
   </xsd:schema>
   <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
   <resheader name="version"><value>2.0</value></resheader>
-  <data name="PageTitle" xml:space="preserve"><value>Music hit parade</value></data>
+  <data name="PageTitle" xml:space="preserve"><value>Hit parade</value></data>
   <data name="Period" xml:space="preserve"><value>Period</value></data>
   <data name="PeriodAll" xml:space="preserve"><value>All time</value></data>
   <data name="PeriodYear" xml:space="preserve"><value>Years</value></data>
