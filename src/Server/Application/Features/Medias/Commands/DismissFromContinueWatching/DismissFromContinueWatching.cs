@@ -22,7 +22,13 @@ public class DismissFromContinueWatchingCommandHandler(
             return;
 
         await accessGuard.EnsureAccessAsync(request.MediaId, cancellationToken);
-        await bookmarkService.DismissAsync(request.MediaId, userId, cancellationToken);
+
+        var sharedProfileId = await currentUser.GetSharedProfileIdAsync(cancellationToken);
+        if (sharedProfileId is { } profileId)
+            await bookmarkService.DismissForSharedProfileAsync(request.MediaId, profileId, cancellationToken);
+        else
+            await bookmarkService.DismissAsync(request.MediaId, userId, cancellationToken);
+
         await context.SaveChangesAsync(cancellationToken);
         cacheInvalidator.InvalidateAll();
     }
