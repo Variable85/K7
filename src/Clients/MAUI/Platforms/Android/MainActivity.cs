@@ -116,10 +116,14 @@ public class MainActivity : MauiAppCompatActivity
 
         // While video is up, deliver DPAD via EvaluateJavascript (not WebView key routing).
         // Native pass-through can go quiet after scrub/seek even when the WebView has focus.
+        // After TV wake the same thing happens on select-profile: the page is painted,
+        // Android focus is on another view, and the remote does nothing.
         if (e is not null && IsDpadNavigationKey(e.KeyCode))
         {
             var dpadPage = GetBlazorPage();
             if (dpadPage?.TryForwardTvVideoDpad(e) == true)
+                return true;
+            if (dpadPage?.TryForwardTvShellDpad(e) == true)
                 return true;
         }
 
@@ -205,6 +209,15 @@ public class MainActivity : MauiAppCompatActivity
     {
         base.OnResume();
         GetBlazorPage()?.RecoverAfterHostResume();
+    }
+
+    public override void OnWindowFocusChanged(bool hasFocus)
+    {
+        base.OnWindowFocusChanged(hasFocus);
+        // OnResume runs before the window can take focus, so RequestFocus there is a no-op
+        // and the remote stays dead on the painted select-profile page.
+        if (hasFocus)
+            GetBlazorPage()?.RestoreInputAfterWindowFocus();
     }
 
     protected override void OnDestroy()

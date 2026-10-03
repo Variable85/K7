@@ -1114,8 +1114,13 @@ var SpatialNav = (function () {
     function handleTvRemoteSelect(phase, keyCode, heldMs) {
         window.__k7TvNativeRemote = true;
 
-        if (phase === 'down')
+        if (phase === 'down') {
+            // After TV standby, document.activeElement is often body. Focus a card
+            // before the snapshot so the matching key-up can activate it.
+            if (!isVideoPlayerActive() && !resolveSelectActivationTarget(document.activeElement))
+                ensurePageFocus();
             snapshotTvSelectTarget();
+        }
 
         var active = (phase === 'up' || phase === 'long-up')
             ? (_tvSelectSnapshotEl && _tvSelectSnapshotEl.isConnected
@@ -3073,13 +3078,17 @@ var SpatialNav = (function () {
 
         window.K7 = window.K7 || {};
         window.K7.onTvRemoteSelect = handleTvRemoteSelect;
-        window.K7.isBridgeAlive = function () { return true; };
+        window.K7.isBridgeAlive = function () {
+            return !!(document.body && document.getElementById('app') && window.SpatialNavigation);
+        };
         window.K7.recoverAfterHostResume = function () {
             try {
                 if (window.K7.dismissPreload) K7.dismissPreload();
                 if (window.K7.setNativePlayerActive) K7.setNativePlayerActive(false, false);
+                if (window.SpatialNavigation && SpatialNavigation.resume) SpatialNavigation.resume();
                 if (window.K7.reInitAndRestoreCarousels) K7.reInitAndRestoreCarousels();
                 if (window.SpatialNav && SpatialNav.refresh) SpatialNav.refresh();
+                ensurePageFocus();
                 var initial = document.querySelector('[data-initial-focus]');
                 if (initial && window.SpatialNav && SpatialNav.focusElement) {
                     SpatialNav.focusElement(initial);
@@ -3156,6 +3165,41 @@ var SpatialNav = (function () {
                 handleKeyUp(fake);
             } else {
                 handleKeyDown(fake);
+            }
+        };
+
+        // Used when Android focus is not on the WebView (TV wake). Native keydown
+        // never reaches SpatialNavigation, so move from here.
+        window.K7.dispatchTvShellDpad = function (arrowKey, keyCode, repeat) {
+            try {
+                if (window.SpatialNavigation && SpatialNavigation.resume)
+                    SpatialNavigation.resume();
+
+                var hadTarget = !!resolveSelectActivationTarget(document.activeElement);
+                if (!hadTarget && !isVideoPlayerActive())
+                    ensurePageFocus();
+                if (!hadTarget)
+                    return true;
+
+                var active = document.activeElement;
+                if ((arrowKey === 'ArrowLeft' || arrowKey === 'ArrowRight')
+                    && active && active.closest && active.closest('[data-carousel]')) {
+                    if (handleCarouselNav(active, arrowKey))
+                        return true;
+                }
+
+                var dir = arrowKey === 'ArrowLeft' ? 'left'
+                    : arrowKey === 'ArrowRight' ? 'right'
+                    : arrowKey === 'ArrowUp' ? 'up'
+                    : arrowKey === 'ArrowDown' ? 'down'
+                    : '';
+                if (dir && window.SpatialNavigation && SpatialNavigation.move(dir))
+                    return true;
+
+                window.K7.dispatchTvArrowKey(arrowKey, 'keydown', keyCode || 0, !!repeat);
+                return true;
+            } catch (ex) {
+                return false;
             }
         };
 

@@ -39,6 +39,7 @@ public partial class BlazorPage
     private CancellationTokenSource? _androidSubtitleWarmCts;
     private static DateTime _lastTvBridgeRestartUtc;
     private bool _tvBridgeCheckPosted;
+    private int _tvBridgeProbeGeneration;
 
     partial void InitializePlayerPlatform()
     {
@@ -80,6 +81,50 @@ public partial class BlazorPage
         }
 
         NotifyTvRemoteDpad(e);
+        return true;
+    }
+
+    /// <summary>
+    /// TV shell (select-profile and the rest of the app): when the WebView lost window
+    /// focus after standby, D-pad never reaches spatial nav. Inject it until focus returns.
+    /// </summary>
+    internal bool TryForwardTvShellDpad(Android.Views.KeyEvent e)
+    {
+        if (_playerService.IsVisible || HasWebViewWindowFocus())
+            return false;
+
+        if (!AndroidTelevision.IsDeviceTelevision())
+            return false;
+
+        var arrow = e.KeyCode switch
+        {
+            Android.Views.Keycode.DpadLeft or Android.Views.Keycode.SystemNavigationLeft => "ArrowLeft",
+            Android.Views.Keycode.DpadRight or Android.Views.Keycode.SystemNavigationRight => "ArrowRight",
+            Android.Views.Keycode.DpadUp or Android.Views.Keycode.SystemNavigationUp => "ArrowUp",
+            Android.Views.Keycode.DpadDown or Android.Views.Keycode.SystemNavigationDown => "ArrowDown",
+            _ => null
+        };
+        if (arrow is null)
+            return false;
+
+        // Key-up has nothing to do once the down was injected. Still consume it so it
+        // cannot land on a focusable PlayerView behind the page.
+        if (e.Action != Android.Views.KeyEventActions.Down)
+            return true;
+
+        BounceWindowFocusToWebView();
+
+        var keyCode = (int)e.KeyCode;
+        var arrowJson = System.Text.Json.JsonSerializer.Serialize(arrow);
+        var repeat = e.RepeatCount > 0 ? "true" : "false";
+        TryEvaluateWebViewJs(
+            "try{if(window.K7&&K7.dispatchTvShellDpad)K7.dispatchTvShellDpad("
+            + arrowJson
+            + ","
+            + keyCode
+            + ","
+            + repeat
+            + ");}catch(e){}");
         return true;
     }
 
@@ -291,10 +336,16 @@ public partial class BlazorPage
         {
             if (blazorWebView.Handler?.PlatformView is global::Android.Webkit.WebView webView)
             {
+                // pauseTimers is process-wide. Standby can pause them without a matching resume,
+                // which leaves the last frame up and drops every remote key.
+                webView.ResumeTimers();
                 webView.OnResume();
                 webView.Focusable = true;
                 webView.FocusableInTouchMode = true;
+                EnsureVideoSurfaceNotFocusable();
                 webView.RequestFocus();
+                webView.Post(BounceWindowFocusToWebView);
+                webView.PostDelayed(BounceWindowFocusToWebView, 300);
             }
         }
         catch
@@ -313,50 +364,132 @@ public partial class BlazorPage
             ScheduleTvBridgeHealthCheck();
     }
 
+    /// <summary>
+    /// Window focus arrives after OnResume. RequestFocus during OnResume is ignored,
+    /// so the painted page never receives the remote until the window is focused.
+    /// </summary>
+    internal void RestoreInputAfterWindowFocus()
+    {
+        if (_playerService.IsVisible)
+            return;
+
+        try
+        {
+            if (blazorWebView.Handler?.PlatformView is not global::Android.Webkit.WebView webView)
+                return;
+
+            webView.ResumeTimers();
+            webView.OnResume();
+            webView.Focusable = true;
+            webView.FocusableInTouchMode = true;
+            if (webView.HasFocus)
+                return;
+
+            EnsureVideoSurfaceNotFocusable();
+            webView.RequestFocus();
+        }
+        catch
+        {
+        }
+    }
+
     private void ScheduleTvBridgeHealthCheck()
     {
         if (_tvBridgeCheckPosted)
             return;
 
-        _tvBridgeCheckPosted = true;
         if (blazorWebView.Handler?.PlatformView is not global::Android.Webkit.WebView webView)
-        {
-            _tvBridgeCheckPosted = false;
             return;
-        }
 
+        _tvBridgeCheckPosted = true;
+        var generation = ++_tvBridgeProbeGeneration;
         webView.PostDelayed(() =>
         {
-            _tvBridgeCheckPosted = false;
-            ProbeTvBridgeOrRestart(webView);
+            if (generation != _tvBridgeProbeGeneration)
+                return;
+
+            _ = ProbeTvBridgeAsync(webView, generation);
         }, 400);
     }
 
-    private void ProbeTvBridgeOrRestart(global::Android.Webkit.WebView webView)
+    private async Task ProbeTvBridgeAsync(global::Android.Webkit.WebView webView, int generation)
     {
-        if (!AppReadySignal.IsSignaled)
-            return;
-
         try
         {
+            var jsAlive = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             webView.EvaluateJavascript(
                 "(function(){try{return !!(window.K7&&K7.isBridgeAlive&&K7.isBridgeAlive());}catch(e){return false;}})()",
-                new JsStringCallback(result =>
-                {
-                    if (IsJsBridgeAliveResult(result))
-                        return;
+                new JsStringCallback(result => jsAlive.TrySetResult(IsJsBridgeAliveResult(result))));
 
-                    if (DateTime.UtcNow - _lastTvBridgeRestartUtc < TimeSpan.FromSeconds(20))
-                        return;
+            var jsDone = await Task.WhenAny(jsAlive.Task, Task.Delay(1200)).ConfigureAwait(false);
+            if (generation != _tvBridgeProbeGeneration)
+                return;
 
-                    _lastTvBridgeRestartUtc = DateTime.UtcNow;
-                    if (Microsoft.Maui.Controls.Application.Current is App app)
-                        app.Restart();
-                }));
+            if (jsDone != jsAlive.Task || !jsAlive.Task.Result)
+            {
+                RestartTvBridge();
+                return;
+            }
+
+            // isBridgeAlive only proves the script loaded. A painted select-profile page
+            // can still have a wedged Blazor dispatcher (remote clicks do nothing).
+            var dispatch = blazorWebView.TryDispatchAsync(async sp =>
+            {
+                var js = sp.GetRequiredService<IJSRuntime>();
+                var alive = await js.InvokeAsync<bool>("K7.isBridgeAlive");
+                if (!alive)
+                    throw new InvalidOperationException("K7 bridge is not alive");
+            });
+
+            var dispatchDone = await Task.WhenAny(dispatch, Task.Delay(2000)).ConfigureAwait(false);
+            if (generation != _tvBridgeProbeGeneration)
+                return;
+
+            if (dispatchDone != dispatch || dispatch.IsFaulted || dispatch.IsCanceled || !dispatch.Result)
+                RestartTvBridge();
         }
-        catch
+        catch (Exception)
         {
+            if (generation == _tvBridgeProbeGeneration)
+                RestartTvBridge();
         }
+        finally
+        {
+            if (generation == _tvBridgeProbeGeneration)
+            {
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    if (generation == _tvBridgeProbeGeneration)
+                        _tvBridgeCheckPosted = false;
+                });
+            }
+        }
+    }
+
+    private void RestartTvBridge()
+    {
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            if (!IsCurrentBlazorPage() || _playerService.IsVisible)
+                return;
+
+            if (DateTime.UtcNow - _lastTvBridgeRestartUtc < TimeSpan.FromSeconds(20))
+                return;
+
+            _tvBridgeProbeGeneration++;
+            _lastTvBridgeRestartUtc = DateTime.UtcNow;
+            if (Microsoft.Maui.Controls.Application.Current is App app)
+                app.Restart();
+        });
+    }
+
+    private bool IsCurrentBlazorPage()
+    {
+        var windows = Microsoft.Maui.Controls.Application.Current?.Windows;
+        if (windows is null || windows.Count == 0)
+            return false;
+
+        return ReferenceEquals(windows[0].Page, this);
     }
 
     private static bool IsJsBridgeAliveResult(string? result)

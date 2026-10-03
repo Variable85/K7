@@ -35,6 +35,15 @@ public class TransparentBlazorWebViewHandler : BlazorWebViewHandler
         // with no Blazor circuit (TV sleep/wake freeze on select-profile).
         platformView.SaveEnabled = false;
 
+        if (ShouldUseTvMode(platformView))
+        {
+            // Default policy lets Android kill the renderer while the TV is off.
+            // The last frame stays on screen and the remote does nothing.
+            platformView.SetRendererPriorityPolicy(
+                global::Android.Webkit.RendererPriority.Important,
+                waivedWhenNotVisible: false);
+        }
+
         if (platformView.Parent is global::Android.Views.View parentView)
         {
             parentView.SetBackgroundColor(shell);
