@@ -85,10 +85,19 @@ public partial class VerticalCarousel : IAsyncDisposable
                     _dotnetRef = DotNetObjectReference.Create(this);
 
                 await _module.InvokeVoidAsync("init", _root, _dotnetRef);
-                if (_disposed)
-                    return;
-                _lastSlideCount = await _module.InvokeAsync<int>("getSlideCount", _root);
             }
+
+            if (_disposed || _module is null)
+                return;
+
+            var slideCount = await _module.InvokeAsync<int>("getSlideCount", _root);
+            if (_disposed || slideCount == _lastSlideCount)
+                return;
+
+            var previous = _lastSlideCount;
+            _lastSlideCount = slideCount;
+            if (previous >= 0)
+                await _module.InvokeVoidAsync("refresh", _root);
         }
         catch (Exception ex) when (IsBenignJsFailure(ex))
         {

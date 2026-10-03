@@ -26,7 +26,11 @@ export function init(rootElement, dotNetRef) {
     var chevronDownNode = rootElement.querySelector('[data-vcarousel-chevron-down]');
     var initialAttr = parseInt(rootElement.getAttribute('data-vcarousel-initial'), 10);
     var currentIndex = Number.isFinite(initialAttr) && initialAttr > 0 ? initialAttr : 0;
+    var currentSlideEl = null;
     var userMoved = false;
+    var hadFocusInside = false;
+    var restoreFocusAfterLayout = false;
+    var pendingForceRelayout = false;
     var scrollAnim = null;
     var lastFocusedPerSlide = {};
     var resizeObserver = null;
@@ -96,7 +100,9 @@ export function init(rootElement, dotNetRef) {
             slides[k].style.minHeight = maxH > 0 ? maxH + 'px' : '';
         }
 
-        viewportNode.style.height = maxH > 0 ? maxH + 'px' : '';
+        // A zero measure (row mid-removal) must not drop the viewport to auto height.
+        // Auto height makes scrollHeight match the client and D-pad scroll becomes a no-op.
+        viewportNode.style.height = maxH > 0 ? maxH + 'px' : viewportNode.style.height;
 
         requestAnimationFrame(function () {
             if (resizeObserver && rootElement.__vcarousel) {
@@ -250,6 +256,7 @@ export function init(rootElement, dotNetRef) {
         var slides = containerNode.children;
         if (idx < 0 || idx >= slides.length) return;
         var slide = slides[idx];
+        currentSlideEl = slide;
         var targetY = slide.offsetTop;
         if (instant) {
             if (scrollAnim) cancelAnimationFrame(scrollAnim);
@@ -280,11 +287,26 @@ export function init(rootElement, dotNetRef) {
     function onFocusIn(e) {
         var idx = getSlideIndex(e.target);
         if (idx >= 0) {
+            hadFocusInside = true;
             lastFocusedPerSlide[idx] = e.target;
+            currentSlideEl = containerNode.children[idx] || currentSlideEl;
             if (idx !== currentIndex) {
                 scrollToSlide(idx, false, true);
             }
         }
+    }
+
+    function onFocusOut(e) {
+        var next = e.relatedTarget;
+        if (next && !rootElement.contains(next))
+            hadFocusInside = false;
+    }
+
+    function focusableInSlide(slide, idx) {
+        var remembered = lastFocusedPerSlide[idx];
+        if (remembered && remembered.isConnected && slide.contains(remembered))
+            return remembered;
+        return slide.querySelector('.focusable');
     }
 
     function onKeyDown(e) {
@@ -293,12 +315,14 @@ export function init(rootElement, dotNetRef) {
         var idx = getSlideIndex(e.target);
         if (idx < 0) return;
 
-        var targetIdx = e.key === 'ArrowUp' ? idx - 1 : idx + 1;
+        var step = e.key === 'ArrowUp' ? -1 : 1;
         var slides = containerNode.children;
+        var targetIdx = idx + step;
+        while (targetIdx >= 0 && targetIdx < slides.length && !focusableInSlide(slides[targetIdx], targetIdx))
+            targetIdx += step;
 
-        if (targetIdx < 0) {
+        if (targetIdx < 0)
             return;
-        }
 
         if (targetIdx >= slides.length) {
             e.preventDefault();
@@ -309,21 +333,101 @@ export function init(rootElement, dotNetRef) {
         e.preventDefault();
         e.stopPropagation();
 
-        var target = lastFocusedPerSlide[targetIdx];
-        if (!target || !target.isConnected) {
-            target = slides[targetIdx].querySelector('.focusable');
-        }
-        if (target) {
+        var target = focusableInSlide(slides[targetIdx], targetIdx);
+        if (target)
             target.focus({ preventScroll: true });
-        }
     }
 
     rootElement.addEventListener('focusin', onFocusIn, true);
+    rootElement.addEventListener('focusout', onFocusOut, true);
     rootElement.addEventListener('keydown', onKeyDown, true);
 
-    function relayoutViewport(instant) {
-        if (scrollAnim && instant) {
-            return;
+    function shouldRestoreFeedFocus(detachedSlide) {
+        if (!hadFocusInside) return false;
+        if (document.querySelector('.k7-menu-dropdown--open, .k7-dialog-backdrop'))
+            return false;
+        var active = document.activeElement;
+        if (!active || !active.isConnected || active === document.body || active === document.documentElement)
+            return true;
+        return !!(detachedSlide && detachedSlide.contains(active));
+    }
+
+    function remapFocusMemory() {
+        var slides = containerNode.children;
+        var remapped = {};
+        var keys = Object.keys(lastFocusedPerSlide);
+        for (var s = 0; s < slides.length; s++) {
+            for (var k = 0; k < keys.length; k++) {
+                var el = lastFocusedPerSlide[keys[k]];
+                if (el && el.isConnected && slides[s].contains(el)) {
+                    remapped[s] = el;
+                    break;
+                }
+            }
+        }
+        lastFocusedPerSlide = remapped;
+    }
+
+    function focusNearestVisibleSlide(preferredIdx) {
+        var slides = containerNode.children;
+        if (slides.length === 0) return -1;
+
+        var start = Math.min(Math.max(preferredIdx, 0), slides.length - 1);
+        var order = [start];
+        for (var d = 1; d < slides.length; d++) {
+            if (start + d < slides.length) order.push(start + d);
+            if (start - d >= 0) order.push(start - d);
+        }
+
+        for (var i = 0; i < order.length; i++) {
+            var slideIdx = order[i];
+            var target = focusableInSlide(slides[slideIdx], slideIdx);
+            if (!target) continue;
+            currentIndex = slideIdx;
+            currentSlideEl = slides[slideIdx];
+            target.focus({ preventScroll: true });
+            return slideIdx;
+        }
+
+        return -1;
+    }
+
+    function noteStructureChange() {
+        var slides = containerNode.children;
+        var detached = currentSlideEl;
+        var removedCurrent = !!(detached && detached.parentElement !== containerNode);
+
+        if (!removedCurrent && detached) {
+            for (var i = 0; i < slides.length; i++) {
+                if (slides[i] === detached) {
+                    currentIndex = i;
+                    break;
+                }
+            }
+        } else {
+            if (slides.length === 0)
+                currentIndex = 0;
+            else if (currentIndex > slides.length - 1)
+                currentIndex = slides.length - 1;
+            else if (currentIndex < 0)
+                currentIndex = 0;
+
+            currentSlideEl = slides.length > 0 ? slides[currentIndex] : null;
+            if (removedCurrent && shouldRestoreFeedFocus(detached))
+                restoreFocusAfterLayout = true;
+        }
+
+        remapFocusMemory();
+        scheduleRelayout(true, true);
+    }
+
+    function relayoutViewport(instant, force) {
+        if (scrollAnim && !force) {
+            if (instant) return;
+        }
+        if (force && scrollAnim) {
+            cancelAnimationFrame(scrollAnim);
+            scrollAnim = null;
         }
 
         containerNode.style.paddingTop = '';
@@ -333,6 +437,8 @@ export function init(rootElement, dotNetRef) {
             viewportNode.style.height = '';
             updatePagination(0);
             setReady(false);
+            currentSlideEl = null;
+            restoreFocusAfterLayout = false;
             return;
         }
 
@@ -351,25 +457,37 @@ export function init(rootElement, dotNetRef) {
         }
 
         var idx = Math.min(Math.max(currentIndex, 0), slides.length - 1);
-        scrollToSlide(idx, instant);
+        var restore = restoreFocusAfterLayout;
+        restoreFocusAfterLayout = false;
+        scrollToSlide(idx, !!(instant || force));
+        if (!restore) return;
+
+        var focusedIdx = focusNearestVisibleSlide(idx);
+        if (focusedIdx >= 0)
+            scrollToSlide(focusedIdx, true);
     }
 
     function layoutSlides() {
         relayoutViewport(false);
     }
 
-    function scheduleRelayout(instant) {
+    function scheduleRelayout(instant, force) {
         if (relayoutTimer) {
             clearTimeout(relayoutTimer);
             relayoutTimer = null;
         }
 
+        if (force)
+            pendingForceRelayout = true;
+
         // Child carousels remount skeleton->content without changing slide count;
         // debounce so Blazor multi-pass renders coalesce into one measure.
         relayoutTimer = setTimeout(function () {
             relayoutTimer = null;
-            if (scrollAnim && instant) return;
-            relayoutViewport(!!instant);
+            var useForce = pendingForceRelayout;
+            pendingForceRelayout = false;
+            if (scrollAnim && instant && !useForce) return;
+            relayoutViewport(!!instant, useForce);
         }, 50);
     }
 
@@ -393,8 +511,7 @@ export function init(rootElement, dotNetRef) {
 
     mutationObserver = typeof MutationObserver !== 'undefined'
         ? new MutationObserver(function () {
-            if (scrollAnim) return;
-            scheduleRelayout(true);
+            noteStructureChange();
         })
         : null;
 
@@ -413,6 +530,7 @@ export function init(rootElement, dotNetRef) {
         scheduleRefresh: function () { scheduleRelayout(true); },
         cleanup: function () {
             rootElement.removeEventListener('focusin', onFocusIn, true);
+            rootElement.removeEventListener('focusout', onFocusOut, true);
             rootElement.removeEventListener('keydown', onKeyDown, true);
             window.removeEventListener('resize', onWindowResize);
             if (relayoutTimer) clearTimeout(relayoutTimer);
