@@ -91,6 +91,22 @@ public static class AndroidExoPlaybackPolicy
         policyOffloadEnabled && Math.Abs(speed - 1.0) < 0.01;
 
     /// <summary>
+    /// Media3 reselects tracks when a renderer reports new capabilities, then seeks.
+    /// That seek reads MediaPeriodHolder.info with no null check and kills playback
+    /// (ERROR_CODE_UNSPECIFIED) if the playing period is already gone. HLS never needs
+    /// it. Muxed Direct Play of a passthrough codec does: a Shield HDMI refresh-rate
+    /// switch changes the reported audio formats, and without a reselection the
+    /// bitstream falls back to PCM.
+    /// </summary>
+    public static bool ShouldInvalidateSelectionsOnRendererCapabilitiesChange(
+        bool isDirectPlay,
+        bool audioPassthroughEnabled,
+        string? audioCodec) =>
+        isDirectPlay
+        && audioPassthroughEnabled
+        && VideoAudioPassthroughCodecs.IsPassthrough(audioCodec);
+
+    /// <summary>
     /// Profile 8.1: query HEVC decoders instead of video/dolby-vision. The file is
     /// unchanged; MediaCodec gets the HDR10 base layer. Native keeps the DV MIME path.
     /// </summary>

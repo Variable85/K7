@@ -168,6 +168,41 @@ public class AndroidExoPlaybackPolicyTests
     }
 
     [Test]
+    public void ShouldInvalidateSelectionsOnRendererCapabilitiesChange_ShouldBeTrue_WhenDirectPlayPassthrough()
+    {
+        AndroidExoPlaybackPolicy.ShouldInvalidateSelectionsOnRendererCapabilitiesChange(
+                isDirectPlay: true,
+                audioPassthroughEnabled: true,
+                audioCodec: "eac3")
+            .Should().BeTrue();
+        AndroidExoPlaybackPolicy.ShouldInvalidateSelectionsOnRendererCapabilitiesChange(
+                isDirectPlay: true,
+                audioPassthroughEnabled: true,
+                audioCodec: "truehd")
+            .Should().BeTrue();
+    }
+
+    [Test]
+    public void ShouldInvalidateSelectionsOnRendererCapabilitiesChange_ShouldBeFalse_WhenHlsOrDecodedOrPassthroughOff()
+    {
+        AndroidExoPlaybackPolicy.ShouldInvalidateSelectionsOnRendererCapabilitiesChange(
+                isDirectPlay: false,
+                audioPassthroughEnabled: true,
+                audioCodec: "eac3")
+            .Should().BeFalse();
+        AndroidExoPlaybackPolicy.ShouldInvalidateSelectionsOnRendererCapabilitiesChange(
+                isDirectPlay: true,
+                audioPassthroughEnabled: true,
+                audioCodec: "aac")
+            .Should().BeFalse();
+        AndroidExoPlaybackPolicy.ShouldInvalidateSelectionsOnRendererCapabilitiesChange(
+                isDirectPlay: true,
+                audioPassthroughEnabled: false,
+                audioCodec: "ac3")
+            .Should().BeFalse();
+    }
+
+    [Test]
     public void ShouldEnableAudioOffloadForSpeed_ShouldStayOff_WhenPolicyDisabled()
     {
         AndroidExoPlaybackPolicy.ShouldEnableAudioOffloadForSpeed(policyOffloadEnabled: false, 1.0)

@@ -11,6 +11,7 @@ using K7.Clients.Shared.Helpers;
 using K7.Clients.Shared.Interfaces;
 using K7.Clients.Shared.Models;
 using K7.Clients.Shared.Services;
+using K7.Shared;
 using K7.Shared.Dtos.Entities.Metadatas.Files.Tracks;
 using K7.Shared.QueryBuilders;
 using Microsoft.Extensions.DependencyInjection;
@@ -562,14 +563,15 @@ public partial class BlazorPage
         _directTrackOverrideUrl = null;
         var platformView = NativePlayer.Handler?.PlatformView as Android.Views.View;
         var playerView = platformView is null ? null : FindPlayerView(platformView);
-        AndroidExoHlsTuning.TryInstallTunedPlayer(NativePlayer, playerView);
+        var invalidateSelections = CurrentExoInvalidateSelectionsOnCapabilitiesChange();
+        AndroidExoHlsTuning.TryInstallTunedPlayer(NativePlayer, playerView, invalidateSelections);
 
         var player = GetPlayer(NativePlayer);
         ApplyAndroidHlsAvSyncSettings(player);
         AttachExoPlaybackBridge(player);
         if (player is IExoPlayer exo)
         {
-            AndroidExoHlsTuning.ApplyPlaybackSurfaceTuning(exo, playerView);
+            AndroidExoHlsTuning.ApplyPlaybackSurfaceTuning(exo, playerView, invalidateSelections);
             TryPublishExoTimelineFromPlayer(exo);
             ApplyPendingAndroidSubtitleStyle();
         }
@@ -819,7 +821,10 @@ public partial class BlazorPage
             // Compressed audio offload cannot be time-stretched, so on Direct Play (offloaded
             // original track) a non-1x rate is silently ignored. Drop offload while speeding
             // so the decoded PCM + Sonic path applies the rate; restore it at 1x.
-            AndroidExoHlsTuning.SetAudioOffloadForSpeed(exo, speed);
+            AndroidExoHlsTuning.SetAudioOffloadForSpeed(
+                exo,
+                speed,
+                CurrentExoInvalidateSelectionsOnCapabilitiesChange());
             var pitch = exo.PlaybackParameters?.Pitch ?? 1f;
             exo.PlaybackParameters = new PlaybackParameters(speed, pitch);
             return true;
@@ -831,6 +836,40 @@ public partial class BlazorPage
     }
 
     internal bool IsAndroidExoHostActive() => UnwrapPlayer(GetPlayer(NativePlayer)) is IExoPlayer;
+
+    /// <summary>
+    /// Capability reselection is only safe to leave on for muxed Direct Play of a
+    /// passthrough codec. HLS (AAC remux) hits the Media3 null-period seek.
+    /// </summary>
+    private bool CurrentExoInvalidateSelectionsOnCapabilitiesChange()
+    {
+        var source = _playerService.Source;
+        var url = source?.Url;
+        var isDirectPlay = !string.IsNullOrEmpty(url)
+            && !StreamingSourceKind.IsHls(source?.MimeType, url);
+        var passthrough = true;
+        try
+        {
+            passthrough = Preferences.Default.Get(PreferenceKeys.VIDEO_AUDIO_PASSTHROUGH.Name, true);
+        }
+        catch
+        {
+        }
+
+        return AndroidExoPlaybackPolicy.ShouldInvalidateSelectionsOnRendererCapabilitiesChange(
+            isDirectPlay,
+            passthrough,
+            _playerService.SelectedAudioTrack?.Codec);
+    }
+
+    private void RefreshExoCapabilityReselection(IExoPlayer exo)
+    {
+        var speed = exo.PlaybackParameters?.Speed ?? 1f;
+        AndroidExoHlsTuning.SetAudioOffloadForSpeed(
+            exo,
+            speed,
+            CurrentExoInvalidateSelectionsOnCapabilitiesChange());
+    }
 
     internal bool AndroidExoPlayerHasError()
     {
@@ -1968,6 +2007,9 @@ public partial class BlazorPage
     {
         MainThread.BeginInvokeOnMainThread(() =>
         {
+            if (UnwrapPlayer(GetPlayer(NativePlayer)) is IExoPlayer capabilityExo)
+                RefreshExoCapabilityReselection(capabilityExo);
+
             var player = GetPlayer(NativePlayer);
             if (player is null)
                 return;

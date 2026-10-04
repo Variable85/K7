@@ -37,7 +37,8 @@ internal static class AndroidExoHlsTuning
     /// </summary>
     internal static IExoPlayer? TryInstallTunedPlayer(
         MediaElement mediaElement,
-        PlayerView? playerView)
+        PlayerView? playerView,
+        bool invalidateSelectionsOnCapabilitiesChange = false)
     {
         if (playerView?.Context is null)
             return null;
@@ -84,7 +85,11 @@ internal static class AndroidExoHlsTuning
                 IsAndroidTelevision(),
                 manufacturer,
                 model);
-            TryApplyPlaybackPreferences(exo, tunneling, offload);
+            TryApplyPlaybackPreferences(
+                exo,
+                tunneling,
+                offload,
+                invalidateSelectionsOnCapabilitiesChange);
             TryApplyMovieAudioAttributes(exo);
 
             var old = playerView.Player;
@@ -209,7 +214,10 @@ internal static class AndroidExoHlsTuning
     /// so playback speed != 1x has no effect. Disable offload while speeding and restore the
     /// policy default at normal speed. Track reselection re-decodes to a PCM + Sonic path.
     /// </summary>
-    internal static void SetAudioOffloadForSpeed(IExoPlayer exo, float speed)
+    internal static void SetAudioOffloadForSpeed(
+        IExoPlayer exo,
+        float speed,
+        bool invalidateSelectionsOnCapabilitiesChange)
     {
         try
         {
@@ -221,14 +229,18 @@ internal static class AndroidExoHlsTuning
                 model);
             var offload = AndroidExoPlaybackPolicy.ShouldEnableAudioOffloadForSpeed(policyOffload, speed);
             var tunneling = AndroidExoPlaybackPolicy.ShouldEnableHdmiTunneling(manufacturer, model);
-            TryApplyPlaybackPreferences(exo, tunneling, offload);
+            TryApplyPlaybackPreferences(exo, tunneling, offload, invalidateSelectionsOnCapabilitiesChange);
         }
         catch
         {
         }
     }
 
-    private static void TryApplyPlaybackPreferences(IExoPlayer exo, bool tunnelingEnabled, bool audioOffload)
+    private static void TryApplyPlaybackPreferences(
+        IExoPlayer exo,
+        bool tunnelingEnabled,
+        bool audioOffload,
+        bool invalidateSelectionsOnCapabilitiesChange)
     {
         try
         {
@@ -242,7 +254,7 @@ internal static class AndroidExoHlsTuning
                 TryInvokeJavaBoolean(
                     javaBuilder,
                     "setAllowInvalidateSelectionsOnRendererCapabilitiesChange",
-                    true);
+                    invalidateSelectionsOnCapabilitiesChange);
             }
 
             var offloadMode = audioOffload
@@ -358,7 +370,10 @@ internal static class AndroidExoHlsTuning
         }
     }
 
-    internal static void ApplyPlaybackSurfaceTuning(IExoPlayer exo, PlayerView? playerView)
+    internal static void ApplyPlaybackSurfaceTuning(
+        IExoPlayer exo,
+        PlayerView? playerView,
+        bool invalidateSelectionsOnCapabilitiesChange = false)
     {
         try
         {
@@ -381,7 +396,11 @@ internal static class AndroidExoHlsTuning
                 IsAndroidTelevision(),
                 manufacturer,
                 model);
-            TryApplyPlaybackPreferences(exo, tunneling, offload);
+            TryApplyPlaybackPreferences(
+                exo,
+                tunneling,
+                offload,
+                invalidateSelectionsOnCapabilitiesChange);
             TryApplyMovieAudioAttributes(exo);
         }
         catch
