@@ -166,6 +166,33 @@ const VIRTUAL_PLACEHOLDER_FOCUS_SELECTOR = [
     'tr.k7-data-table-placeholder'
 ].join(', ');
 
+const VIRTUAL_BROWSE_ROOT_SELECTOR = '.k7-virtual-grid, .k7-virtual-list, .k7-data-table-scroll, .browse-view-table, .k7-table-wrap';
+
+function isTransientFocus(el) {
+    return !el || !el.isConnected
+        || el === document.body
+        || el === document.documentElement;
+}
+
+function isInVirtualBrowse(el) {
+    return !!(el && el.closest && el.closest(VIRTUAL_BROWSE_ROOT_SELECTOR));
+}
+
+// Parked hub pages and inactive browse surfaces stay in the DOM. Their key
+// handlers must not swallow Up/Down while focus is on the navbar or filters.
+function isGridKeyNavEligible(scrollRoot) {
+    if (!(scrollRoot instanceof Element) || !scrollRoot.isConnected)
+        return false;
+    if (scrollRoot.closest('[inert]'))
+        return false;
+    const page = scrollRoot.closest('.feed-hub-page');
+    if (page && !page.classList.contains('feed-hub-page--active'))
+        return false;
+    if (scrollRoot.closest('.browse-view-surface.is-inactive'))
+        return false;
+    return true;
+}
+
 function getGridColumnCount(scrollRoot, fallback) {
     const row = scrollRoot.querySelector('.k7-virtual-grid-row');
     if (!row) return fallback || 1;
@@ -181,6 +208,7 @@ function getGridColumnCount(scrollRoot, fallback) {
  * - Virtualize mounts a window around that index; unloaded slots are empty tiles
  * - never steal focus to the last loaded row when a later window mounts
  * - leave the grid on Up only when scrollTop is already at the top
+ * - do not capture Up/Down while focus is on the navbar or filter bar
  * - recover focus when Virtualize replaces a focused node
  * - ArrowRight still reaches jump-index via spatial nav
  */
@@ -540,10 +568,18 @@ export function initVirtualKeyNav(scrollRoot, itemHeight, options = {}) {
         const focusedInGrid = !!(focused && scrollRoot.contains(focused)
             && focused.matches && focused.matches(focusableSelector));
         if (!focusedInGrid) {
-            if (hasLogicalRows())
-                return moveLogicalRow(isDown ? 'down' : 'up', _lastCol);
+            // Focus on the navbar, filter bar, or any other real control must
+            // keep moving. A pending row only continues while focus was dropped
+            // on body by Virtualize replacing the focused node.
+            const transient = isTransientFocus(focused) || focused === scrollRoot;
+            if (!transient) {
+                _waitingForRow = false;
+                return false;
+            }
             if (!_waitingForRow)
                 return false;
+            if (hasLogicalRows())
+                return moveLogicalRow(isDown ? 'down' : 'up', _lastCol);
             requestAdjacentRow(isDown ? 'down' : 'up', _lastCol, null);
             return true;
         }
@@ -622,8 +658,10 @@ export function initVirtualKeyNav(scrollRoot, itemHeight, options = {}) {
 
     const onFocusOut = () => {
         if (_recovering) return;
+        if (!isGridKeyNavEligible(scrollRoot)) return;
         setTimeout(() => {
             if (_recovering) return;
+            if (!isGridKeyNavEligible(scrollRoot)) return;
             const active = document.activeElement;
             if (active && active.isConnected && scrollRoot.contains(active))
                 return;
@@ -668,6 +706,7 @@ export function initVirtualKeyNav(scrollRoot, itemHeight, options = {}) {
 
     const mutationObserver = typeof MutationObserver !== 'undefined'
         ? new MutationObserver(() => {
+            if (!isGridKeyNavEligible(scrollRoot)) return;
             if (_leaveGridOnPurpose) return;
             if (_waitingForRow) {
                 tryFulfillPendingFocus();
@@ -700,6 +739,9 @@ export function initVirtualKeyNav(scrollRoot, itemHeight, options = {}) {
         mutationObserver,
         handleVerticalArrow,
         isWaiting: () => _waitingForRow,
+        cancelWait: () => {
+            _waitingForRow = false;
+        },
         setItemHeight: (height) => {
             if (typeof height === 'number' && height > 0)
                 itemHeightPx = height;
@@ -773,22 +815,27 @@ export function handleVirtualBrowseArrow(arrowKey, focusedEl) {
     if (arrowKey !== 'ArrowDown' && arrowKey !== 'ArrowUp') return false;
     if (focusedEl && focusedEl.closest && focusedEl.closest('.k7-jump-index')) return false;
 
+    // Navbar and filter bar are outside the grid. Swallowing Up/Down here left
+    // focus stuck on that chrome after a pending row never mounted.
+    if (!isTransientFocus(focusedEl) && !isInVirtualBrowse(focusedEl)) {
+        for (const [, handlers] of _gridKeyHandlers) {
+            if (handlers && typeof handlers.cancelWait === 'function')
+                handlers.cancelWait();
+        }
+        return false;
+    }
+
     let root = focusedEl && focusedEl.closest
-        ? focusedEl.closest('.k7-virtual-grid, .k7-virtual-list, .k7-data-table-scroll, .browse-view-table, .k7-table-wrap')
+        ? focusedEl.closest(VIRTUAL_BROWSE_ROOT_SELECTOR)
         : null;
+    if (root && !isGridKeyNavEligible(root))
+        root = null;
 
     if (!root) {
         for (const [el, handlers] of _gridKeyHandlers) {
+            if (!isGridKeyNavEligible(el))
+                continue;
             if (handlers && typeof handlers.isWaiting === 'function' && handlers.isWaiting()) {
-                root = el;
-                break;
-            }
-        }
-    }
-
-    if (!root && (!focusedEl || focusedEl === document.body || focusedEl === document.documentElement)) {
-        for (const [el] of _gridKeyHandlers) {
-            if (el.querySelector('[data-grid-row]')) {
                 root = el;
                 break;
             }
