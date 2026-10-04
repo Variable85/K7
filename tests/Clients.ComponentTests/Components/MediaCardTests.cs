@@ -92,7 +92,7 @@ public class MediaCardTests
     }
 
     [Test]
-    public void Render_ShouldKeepTitleAsText_WhenTitleHrefMatchesCard()
+    public void Render_ShouldLinkTitle_WhenItMatchesCardHref()
     {
         using var ctx = CreateContext();
         var model = new MediaCardViewModel
@@ -100,8 +100,7 @@ public class MediaCardTests
             Id = Guid.NewGuid().ToString(),
             Kind = MediaCardKind.Serie,
             MediaType = MediaType.Serie,
-            Title = "Breaking Bad",
-            TitleHref = "/series/1"
+            Title = "Breaking Bad"
         };
 
         var cut = ctx.Render<MediaCard>(p => p
@@ -109,8 +108,10 @@ public class MediaCardTests
             .Add(c => c.Href, "/series/1")
             .Add(c => c.FooterVisible, true));
 
-        cut.FindAll("a.media-card-title-link").Should().BeEmpty();
-        cut.Find(".media-card-title").TextContent.Should().Be("Breaking Bad");
+        var link = cut.Find("a.media-card-title-link");
+        link.TextContent.Should().Be("Breaking Bad");
+        link.GetAttribute("href").Should().Be("/series/1");
+        link.GetAttribute("tabindex").Should().Be("-1");
     }
 
     [Test]

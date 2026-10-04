@@ -168,10 +168,10 @@ else
             <div class="media-card-footer mt-1">
                 <div class="d-flex flex-col">
                     <span class="media-card-title">
-                        @if (ShowTitleLink)
+                        @if (!string.IsNullOrEmpty(TitleLinkHref))
                         {
                             <a class="media-card-title-inner media-card-title-link"
-                               href="@Model.TitleHref"
+                               href="@TitleLinkHref"
                                tabindex="-1"
                                @onclick:stopPropagation="true">@Model.Title</a>
                         }

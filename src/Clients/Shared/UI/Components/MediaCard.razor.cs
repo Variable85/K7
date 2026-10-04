@@ -103,9 +103,8 @@ public partial class MediaCard : IDisposable
         }
     }
 
-    private bool ShowTitleLink =>
-        !string.IsNullOrEmpty(Model?.TitleHref)
-        && !MediaCardRelatedLinks.MatchesCard(Model.TitleHref, Href);
+    private string? TitleLinkHref =>
+        !string.IsNullOrEmpty(Model?.TitleHref) ? Model.TitleHref : Href;
 
     private bool LongPressEnabled =>
         ContextMenuEnabled
