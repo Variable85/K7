@@ -47,7 +47,8 @@ public static class LiteMediaQueryExtensions
                 .ThenInclude(s => s.Pictures)
             .Include(m => ((SerieSeason)m).Serie!)
                 .ThenInclude(s => s.Pictures)
-            .Include(m => ((SerieSeason)m).Episodes);
+            .Include(m => ((SerieSeason)m).Episodes)
+                .ThenInclude(e => e.Ratings);
 
         return query;
     }

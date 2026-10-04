@@ -1,7 +1,9 @@
 using K7.Server.Application.Common.Mappings;
 using K7.Server.Domain.Entities;
 using K7.Server.Domain.Entities.Medias;
+using K7.Server.Domain.Entities.Ratings;
 using K7.Server.Domain.Entities.Users;
+using K7.Server.Domain.Enums;
 using K7.Shared.Dtos.Entities.Medias;
 
 namespace K7.Server.Application.UnitTests.Common.Mappings;
@@ -145,6 +147,48 @@ public class MediaMappingsTests
         var dto = (LiteSerieSeasonDto)season.ToLiteMediaDto();
 
         dto.EpisodeCount.Should().Be(0);
+    }
+
+    [Test]
+    public void ToLiteMediaDto_ShouldMapEpisodeAirDateAndRuntime()
+    {
+        var episode = new SerieEpisode
+        {
+            Id = Guid.NewGuid(),
+            Title = "Pilot",
+            SortTitle = "Pilot",
+            EpisodeNumber = 1,
+            AirDate = new DateOnly(2008, 1, 20),
+            Runtime = 47
+        };
+
+        var dto = (LiteSerieEpisodeDto)episode.ToLiteMediaDto();
+
+        dto.AirDate.Should().Be(new DateOnly(2008, 1, 20));
+        dto.Runtime.Should().Be(47);
+    }
+
+    [Test]
+    public void ToLiteMediaDto_ShouldMapEpisodeMetadataProviderRating()
+    {
+        var episode = new SerieEpisode
+        {
+            Id = Guid.NewGuid(),
+            Title = "Pilot",
+            SortTitle = "Pilot",
+            EpisodeNumber = 1
+        };
+        episode.Ratings.Add(new MetadataProviderRating
+        {
+            MetadataProvider = MetadataProvider.TMDb,
+            Value = 8.24,
+            MinimumValue = 0,
+            MaximumValue = 10
+        });
+
+        var dto = (LiteSerieEpisodeDto)episode.ToLiteMediaDto();
+
+        dto.Rating.Should().Be(8.24);
     }
 
     [Test]

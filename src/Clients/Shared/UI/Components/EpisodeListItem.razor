@@ -54,10 +54,10 @@
         <div class="episode-card-info">
             <div class="episode-card-meta">
                 <span class="episode-card-number">E@(Episode.EpisodeNumber)</span>
-                @if (Episode.Duration.HasValue)
+                @if (DurationLabel is not null)
                 {
                     <span class="episode-card-meta-separator">&bull;</span>
-                    <span class="episode-card-duration">@FormatDuration(Episode.Duration.Value)</span>
+                    <span class="episode-card-duration">@DurationLabel</span>
                 }
             </div>
             <p class="episode-card-title @(IsUnavailable ? "episode-card-title--unavailable" : null)">@(Episode.Title ?? S["Untitled"])</p>
@@ -65,9 +65,9 @@
             {
                 <span class="episode-card-unavailable text-muted text-xs">@S["MediaUnavailable"]</span>
             }
-            @if (Episode.ReleaseDate.HasValue)
+            @if (AirDateLabel is not null)
             {
-                <span class="episode-card-date">@Episode.ReleaseDate.Value.ToString("d MMMM yyyy")</span>
+                <span class="episode-card-date">@AirDateLabel</span>
             }
             @if (!string.IsNullOrEmpty(Episode.Overview))
             {

@@ -26,9 +26,38 @@
                 </span>
                 <h3 class="tv-episode-title">@_episode.Title</h3>
 
-                @if (_episode.ReleaseDate is not null)
+                @if (AirDateLabel is not null || DurationLabel is not null || RatingLabel is not null)
                 {
-                    <span class="tv-episode-date text-sm">@_episode.ReleaseDate.Value.ToString("d MMMM yyyy")</span>
+                    <div class="tv-episode-meta">
+                        @if (RatingLabel is not null)
+                        {
+                            <K7Chip Class="tv-episode-rating"
+                                    Size="sm"
+                                    Icon="star"
+                                    Color="primary"
+                                    Variant="filled"
+                                    Style="font-weight: 700;">
+                                @RatingLabel
+                            </K7Chip>
+                        }
+                        @if (AirDateLabel is not null || DurationLabel is not null)
+                        {
+                            <div class="tv-episode-details">
+                                @if (AirDateLabel is not null)
+                                {
+                                    <span class="tv-episode-date text-sm">@AirDateLabel</span>
+                                }
+                                @if (AirDateLabel is not null && DurationLabel is not null)
+                                {
+                                    <span class="tv-episode-meta-sep text-sm" aria-hidden="true">&bull;</span>
+                                }
+                                @if (DurationLabel is not null)
+                                {
+                                    <span class="tv-episode-duration text-sm">@DurationLabel</span>
+                                }
+                            </div>
+                        }
+                    </div>
                 }
 
                 <div class="tv-episode-overview overview-clickable focusable" tabindex="0" role="button" @onclick="OpenSynopsisAsync">

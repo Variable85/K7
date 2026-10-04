@@ -109,6 +109,10 @@
     }
 }
 
+:global(html.platform-tv) .media-hero.movie-hero {
+    gap: var(--space-6);
+}
+
 .movie-hero-copy {
     gap: var(--space-4);
 }

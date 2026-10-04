@@ -17,7 +17,7 @@ public sealed class LiteMediaProjectionService(IApplicationDbContext context)
     private sealed record PictureRow(Guid Id, Guid MediaId, MetadataPictureType Type, bool IsLocal, string? DominantColor, int? OriginalWidth, int? OriginalHeight);
     private sealed record AlbumRow(Guid Id, Guid? ArtistId, string? ArtistName);
     private sealed record TrackRow(Guid Id, Guid AlbumId, int? TrackNumber, Guid? ArtistId, string? AlbumTitle, Guid? AlbumArtistId, string? AlbumArtistName, string? ArtistName, double? LoudnessLufs, double? FadeInDuration, double? FadeOutDuration, double? ReplayGainTrackGain, string? Genre);
-    private sealed record EpisodeRow(Guid Id, int EpisodeNumber, int SeasonNumber, Guid SerieId, string? SerieTitle, DateOnly? SerieReleaseDate, Guid SeasonId, string? Overview);
+    private sealed record EpisodeRow(Guid Id, int EpisodeNumber, int SeasonNumber, Guid SerieId, string? SerieTitle, DateOnly? SerieReleaseDate, Guid SeasonId, string? Overview, DateOnly? AirDate, int? Runtime);
     private sealed record SeasonRow(Guid Id, Guid SerieId, int SeasonNumber, string? SerieTitle, int EpisodeCount);
     private sealed record ArtistRow(Guid Id, MusicArtistType ArtistType, string? Country);
     private sealed record FileRow(Guid MediaId, Guid Id, double? Duration);
@@ -123,7 +123,9 @@ public sealed class LiteMediaProjectionService(IApplicationDbContext context)
                 e.Serie.Title,
                 e.Serie.ReleaseDate,
                 e.SeasonId,
-                e.Overview))
+                e.Overview,
+                e.AirDate,
+                e.Runtime))
             .ToListAsync(cancellationToken);
         var episodeById = episodeRows.ToDictionary(e => e.Id);
 
@@ -370,6 +372,8 @@ public sealed class LiteMediaProjectionService(IApplicationDbContext context)
                     EpisodeNumber = episode.EpisodeNumber,
                     SeasonNumber = episode.SeasonNumber,
                     SerieSeasonCount = seasonCountsBySerieId.GetValueOrDefault(episode.SerieId),
+                    AirDate = episode.AirDate,
+                    Runtime = episode.Runtime,
                     Duration = videoFileByMediaId.GetValueOrDefault(row.Id)?.Duration ?? remoteFileByMediaId.GetValueOrDefault(row.Id)?.Duration,
                     Overview = episode.Overview,
                     SerieId = episode.SerieId,

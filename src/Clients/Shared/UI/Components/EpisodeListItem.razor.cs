@@ -1,5 +1,6 @@
 ﻿using K7.Clients.Shared.Helpers;
 using K7.Clients.Shared.Interfaces;
+using K7.Clients.Shared.UI.Helpers;
 using K7.Clients.Shared.Models;
 using K7.Server.Domain.Enums;
 using K7.Shared.Navigation;
@@ -59,6 +60,10 @@ public partial class EpisodeListItem : IDisposable
     private CancellationTokenSource? _longPressCts;
     private double _touchStartX;
     private double _touchStartY;
+
+    private string? DurationLabel => EpisodeDisplayHelper.FormatDuration(Episode);
+
+    private string? AirDateLabel => EpisodeDisplayHelper.FormatAirDate(Episode);
 
     private bool IsUnavailable =>
         !Episode.IndexedFileId.HasValue && !Episode.RemoteIndexedFileId.HasValue;
@@ -352,14 +357,6 @@ public partial class EpisodeListItem : IDisposable
     {
         if (ShouldPreventLinkActivation)
             _preventNextClick = true;
-    }
-
-    private static string FormatDuration(double totalSeconds)
-    {
-        var ts = TimeSpan.FromSeconds(totalSeconds);
-        return ts.TotalHours >= 1
-            ? $"{(int)ts.TotalHours}h{ts.Minutes:00}"
-            : $"{ts.Minutes}min";
     }
 
     public void Dispose()

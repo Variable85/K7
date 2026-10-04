@@ -129,7 +129,12 @@
 @media (min-width: 600px) {
     .serie-hero.media-hero {
         padding: var(--space-10);
+        gap: var(--space-6);
     }
+}
+
+:global(html.platform-tv) .serie-hero.media-hero {
+    gap: var(--space-6);
 }
 
 @media (max-width: 599.98px) {

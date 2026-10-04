@@ -203,6 +203,9 @@ public static class MediaMappings
                     EpisodeNumber = episode.EpisodeNumber,
                     SeasonNumber = episode.Season?.SeasonNumber ?? 0,
                     SerieSeasonCount = SerieSeasonCountHelper.ResolveCount(episode.SerieId, episode.Serie, serieSeasonCounts),
+                    AirDate = episode.AirDate,
+                    Runtime = episode.Runtime,
+                    Rating = GetCommunityRating(domain),
                     Duration = (indexedFile?.FileMetadata as VideoFileMetadata)?.Duration.TotalSeconds
                         ?? remoteIndexedFile?.Duration?.TotalSeconds,
                     Overview = episode.Overview,
@@ -456,4 +459,13 @@ public static class MediaMappings
 
     private static int? GetUserRating(BaseMedia domain) =>
         domain.Ratings.OfType<UserRating>().FirstOrDefault()?.Value is double v ? (int)v : null;
+
+    private static double? GetCommunityRating(BaseMedia domain)
+    {
+        var rating = domain.Ratings.OfType<MetadataProviderRating>().FirstOrDefault();
+        if (rating is null || rating.Value <= 0)
+            return null;
+
+        return rating.Value;
+    }
 }

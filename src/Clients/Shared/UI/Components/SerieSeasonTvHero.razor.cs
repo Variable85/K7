@@ -24,6 +24,12 @@ public partial class SerieSeasonTvHero
     private bool CanRestartEpisode =>
         CanResumePlayback && SeriePlaybackHelper.IsInProgress(_episode);
 
+    private string? AirDateLabel => _episode is null ? null : EpisodeDisplayHelper.FormatAirDate(_episode);
+
+    private string? DurationLabel => _episode is null ? null : EpisodeDisplayHelper.FormatDuration(_episode);
+
+    private string? RatingLabel => _episode is null ? null : EpisodeDisplayHelper.FormatRating(_episode);
+
     private string PlayLabel
     {
         get

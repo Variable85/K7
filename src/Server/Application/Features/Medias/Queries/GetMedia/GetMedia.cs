@@ -94,6 +94,8 @@ public class GetMediaQueryHandler(
                     .ThenInclude(f => f.FileMetadata)
             .Include(x => (x as SerieSeason)!.Episodes)
                 .ThenInclude(e => e.RemoteIndexedFiles)
+            .Include(x => (x as SerieSeason)!.Episodes)
+                .ThenInclude(e => e.Ratings)
             .Include(x => (x as SerieSeason)!.Serie)
             // SerieEpisode: include serie and season for context
             .Include(x => (x as SerieEpisode)!.Serie)

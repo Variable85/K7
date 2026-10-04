@@ -21,14 +21,13 @@
     flex-direction: column;
     justify-content: flex-end;
     padding: 0 48px var(--space-8);
-    gap: 8px;
+    gap: var(--space-6);
     max-width: 700px;
 }
 
 ::deep .tv-logo:not(.k7-img-wrap--custom-fallback) {
     max-width: 300px;
     max-height: 80px;
-    margin-bottom: 8px;
 }
 
 ::deep .tv-logo .k7-img {
@@ -55,9 +54,30 @@
     overflow: hidden;
 }
 
-.tv-episode-date {
+.tv-episode-meta,
+.tv-episode-details {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.tv-episode-meta {
+    gap: var(--space-3);
+}
+
+.tv-episode-details {
+    gap: var(--space-2);
+}
+
+.tv-episode-date,
+.tv-episode-duration,
+.tv-episode-meta-sep {
     color: var(--color-text-on-media-muted);
     text-shadow: var(--media-copy-shadow);
+}
+
+.tv-episode-meta-sep {
+    opacity: 0.5;
 }
 
 .tv-episode-info {
