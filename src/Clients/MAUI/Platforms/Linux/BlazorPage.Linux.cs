@@ -434,6 +434,7 @@ public partial class BlazorPage
     /// unregistered custom scheme as a non-CORS, insecure origin: dynamic <c>import()</c> of
     /// ES modules (ApexCharts) fails with "Importing a module script failed" and secure-context
     /// APIs are unavailable. Registering the scheme fixes both. Safe to repeat.
+    /// Do not mark the scheme local: WebKit then treats it like file and the page stays blank.
     /// </summary>
     private void ConfigureWebKitSecurity()
     {
@@ -447,7 +448,6 @@ public partial class BlazorPage
             if (securityManager is null)
                 return;
 
-            securityManager.RegisterUriSchemeAsLocal("app");
             securityManager.RegisterUriSchemeAsCorsEnabled("app");
             securityManager.RegisterUriSchemeAsSecure("app");
             InjectLinuxHostMarker(webView!);

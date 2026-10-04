@@ -181,7 +181,7 @@ public sealed class Program : GtkMauiApplication
         try
         {
             var securityManager = WebKit.WebContext.GetDefault()?.GetSecurityManager();
-            securityManager?.RegisterUriSchemeAsLocal("app");
+            // Local would make WebKit treat app:// like file:// and the page stays blank after the splash.
             securityManager?.RegisterUriSchemeAsCorsEnabled("app");
             securityManager?.RegisterUriSchemeAsSecure("app");
         }

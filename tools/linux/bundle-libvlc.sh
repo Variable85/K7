@@ -50,7 +50,7 @@ DROP_PLUGINS="libvaapi_plugin.so libx264_plugin.so libx26410b_plugin.so libx265_
 # Shared libraries every GTK4 / WebKitGTK desktop already provides (the .deb depends on the
 # non-obvious ones): never copied, resolved from the host at run time. Everything else that
 # the kept plugins pull in (ffmpeg, dav1d, matroska, libva, ...) is copied to lib/.
-HOST_LIBS='^(ld-linux-x86-64|libc|libm|libdl|libpthread|librt|libresolv|libutil|libnsl|libanl|libstdc\+\+|libgcc_s|libatomic|libz|libpulse|libpulsecommon-[0-9.]+|libdbus-1|libsystemd|libgnutls|libnettle|libhogweed|libgmp|libtasn1|libidn2|libunistring|libp11-kit|libffi|libxml2|libglib-2\.0|libgobject-2\.0|libgio-2\.0|libgmodule-2\.0|libgthread-2\.0|libpcre2-8|libselinux|libmount|libblkid|libuuid|libcap|libgcrypt|libgpg-error|liblzma|libzstd|liblz4|libbz2|libX11|libXext|libXau|libXdmcp|libXfixes|libXrender|libxcb[-a-z0-9]*|libdrm|libgbm|libEGL|libGL|libGLX|libGLdispatch|libOpenGL|libwayland-[a-z]+|libxkbcommon|libfontconfig|libfreetype|libharfbuzz|libfribidi|libpng16|libexpat|libbrotli[a-z]*|libgraphite2|libcairo|libcairo-gobject|libpango-1\.0|libpangocairo-1\.0|libpangoft2-1\.0|libgdk_pixbuf-2\.0|librsvg-2|libjpeg|libtiff|libwebp[a-z]*|libsharpyuv|libudev|libusb-1\.0|libcom_err|libkrb5[a-z]*|libk5crypto|libgssapi_krb5|libkeyutils|libcrypto|libssl|libsasl2|libldap[-_0-9a-z.]*|liblber[-0-9.]*|libmd|libbsd|libcrypt|libtinfo|libncursesw|libpixman-1|libthai|libdatrie|libdeflate|libjbig|libLerc|libdw|libelf)\.so'
+HOST_LIBS='^(ld-linux-x86-64|libc|libm|libdl|libpthread|librt|libresolv|libutil|libnsl|libanl|libstdc\+\+|libgcc_s|libatomic|libz|libpulse|libpulsecommon-[0-9.]+|libdbus-1|libsystemd|libgnutls|libnettle|libhogweed|libgmp|libtasn1|libidn2|libunistring|libp11-kit|libffi|libglib-2\.0|libgobject-2\.0|libgio-2\.0|libgmodule-2\.0|libgthread-2\.0|libpcre2-8|libselinux|libmount|libblkid|libuuid|libcap|libgcrypt|libgpg-error|liblzma|libzstd|liblz4|libbz2|libX11|libXext|libXau|libXdmcp|libXfixes|libXrender|libxcb[-a-z0-9]*|libdrm|libgbm|libEGL|libGL|libGLX|libGLdispatch|libOpenGL|libwayland-[a-z]+|libxkbcommon|libfontconfig|libfreetype|libharfbuzz|libfribidi|libpng16|libexpat|libbrotli[a-z]*|libgraphite2|libcairo|libcairo-gobject|libpango-1\.0|libpangocairo-1\.0|libpangoft2-1\.0|libgdk_pixbuf-2\.0|librsvg-2|libjpeg|libtiff|libwebp[a-z]*|libsharpyuv|libudev|libusb-1\.0|libcom_err|libkrb5[a-z]*|libk5crypto|libgssapi_krb5|libkeyutils|libcrypto|libssl|libsasl2|libldap[-_0-9a-z.]*|liblber[-0-9.]*|libmd|libbsd|libcrypt|libtinfo|libncursesw|libpixman-1|libthai|libdatrie|libdeflate|libjbig|libLerc|libdw|libelf)\.so'
 
 mkdir -p "$CACHE_DIR"
 SNAP="$CACHE_DIR/vlc_${VLC_SNAP_REVISION}.snap"
@@ -78,6 +78,12 @@ mkdir -p "$OUT/lib" "$OUT/plugins"
 cp -L "$SRC_LIB/libvlc.so.12.0.0" "$OUT/libvlc.so.12"
 cp -L "$SRC_LIB/libvlccore.so.9.0.0" "$OUT/libvlccore.so.9"
 cp -L "$SRC_LIB/vlc/libvlc_pulse.so.0.0.0" "$OUT/lib/libvlc_pulse.so.0"
+# unsquashfs was given the real files only. DT_NEEDED is the soname (libvlc_pulse.so.0),
+# and a distro VLC 3 does not ship that library, so ldd reports it missing and the Pulse
+# plugin is dropped. The same gap would let a distro libvlccore.so.9 satisfy the other plugins.
+ln -s libvlc.so.12.0.0 "$SRC_LIB/libvlc.so.12"
+ln -s libvlccore.so.9.0.0 "$SRC_LIB/libvlccore.so.9"
+ln -s libvlc_pulse.so.0.0.0 "$SRC_LIB/vlc/libvlc_pulse.so.0"
 
 is_dropped() {
   case " $DROP_PLUGINS " in
@@ -111,9 +117,9 @@ for category in $KEEP_CATEGORIES "${!KEEP_ONLY[@]}"; do
   fi
 done
 
-# ldd resolves against the snap's own libvlccore / libvlc_pulse first (a distro VLC 3 installs
-# a libvlccore.so.9 of its own), then the host libraries.
-export LD_LIBRARY_PATH="$SRC_LIB:$SRC_LIB/vlc${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+# ldd resolves against the bundle sonames first, then the snap tree (symlinks above), then the
+# host. A distro VLC 3 libvlccore.so.9 must not be copied in their place.
+export LD_LIBRARY_PATH="$OUT:$OUT/lib:$SRC_LIB:$SRC_LIB/vlc${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 declare -A bundled=()
 declare -A host=()
 
@@ -122,17 +128,27 @@ resolve() {
   ldd "$1" | awk '/=> not found/ { print "MISSING", $1 } /=> \// { print $1, $3 }'
 }
 
-# Records the dependencies of a file in bundled / host; prints the unresolved sonames.
+# Records the dependencies of a file in the global bundled / host maps.
+# Must not run inside $(...) : that subshell would drop the maps and ship plugins
+# with no ffmpeg / dav1d / matroska next to them.
+missing_deps=""
 collect() {
-  local file="$1" missing=""
+  local file="$1"
+  missing_deps=""
   local soname path
   while read -r soname path; do
     if [ "$soname" = "MISSING" ]; then
-      missing="$missing $path"
+      missing_deps="$missing_deps $path"
       continue
     fi
+    # Already placed under their soname. Anything else ldd finds, including libraries
+    # that live inside the snap tree, has to be copied or the bundle only works on the
+    # build machine.
+    case "$soname" in
+      libvlc.so.12|libvlccore.so.9|libvlc_pulse.so.0) continue ;;
+    esac
     case "$path" in
-      "$WORK"/*) continue ;;
+      "$OUT"/*) continue ;;
     esac
     if [[ "$soname" =~ $HOST_LIBS ]]; then
       host["$soname"]=1
@@ -140,13 +156,12 @@ collect() {
       bundled["$soname"]="$path"
     fi
   done < <(resolve "$file")
-  printf '%s' "$missing"
 }
 
 for core in "$OUT/libvlc.so.12" "$OUT/libvlccore.so.9" "$OUT/lib/libvlc_pulse.so.0"; do
-  missing="$(collect "$core")"
-  if [ -n "$missing" ]; then
-    echo "bundle-libvlc: $(basename "$core") needs$missing (install the VLC 3 plugin packages so ldd can find them)" >&2
+  collect "$core"
+  if [ -n "$missing_deps" ]; then
+    echo "bundle-libvlc: $(basename "$core") needs$missing_deps (install the VLC 3 plugin packages so ldd can find them)" >&2
     exit 1
   fi
 done
@@ -154,9 +169,9 @@ done
 kept=()
 for rel in "${selected[@]}"; do
   src="$SRC_PLUGINS/$rel"
-  missing="$(collect "$src")"
-  if [ -n "$missing" ]; then
-    echo "bundle-libvlc: dropping $rel (unresolved:$missing)"
+  collect "$src"
+  if [ -n "$missing_deps" ]; then
+    echo "bundle-libvlc: dropping $rel (unresolved:$missing_deps)"
     continue
   fi
   mkdir -p "$OUT/plugins/$(dirname "$rel")"
@@ -174,9 +189,34 @@ for required in codec/libavcodec_plugin.so audio_output/libpulse_plugin.so video
   fi
 done
 
-for soname in "${!bundled[@]}"; do
-  cp -L "${bundled[$soname]}" "$OUT/lib/$soname"
+copy_bundled() {
+  local soname
+  for soname in "${!bundled[@]}"; do
+    if [ ! -e "$OUT/lib/$soname" ]; then
+      cp -L "${bundled[$soname]}" "$OUT/lib/$soname"
+    fi
+  done
+}
+
+copy_bundled
+# Plugins link ffmpeg, which links dav1d / matroska / ... One pass only sees the first edge.
+for _round in 1 2 3 4 5 6; do
+  before="${#bundled[@]}"
+  while IFS= read -r -d '' file; do
+    collect "$file"
+    if [ -n "$missing_deps" ]; then
+      echo "bundle-libvlc: $(basename "$file") needs$missing_deps" >&2
+      exit 1
+    fi
+  done < <(find "$OUT" -name '*.so*' -type f -print0)
+  [ "${#bundled[@]}" -eq "$before" ] && break
+  copy_bundled
 done
+
+if [ ! -f "$OUT/lib/libavcodec.so.60" ]; then
+  echo "bundle-libvlc: libavcodec.so.60 was not copied into the bundle" >&2
+  exit 1
+fi
 
 # Every bundled object must resolve with the bundle plus the host libraries only.
 export LD_LIBRARY_PATH="$OUT:$OUT/lib"

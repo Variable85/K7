@@ -233,7 +233,7 @@
     <DebCategories>AudioVideo;Video;Audio;Player;</DebCategories>
     <!-- GTK4 / WebKitGTK host, the host libraries the bundled libvlc keeps using (see HOST_LIBS in
          bundle-libvlc.sh), GStreamer for WebKitGTK media (music, HLS) and xdg-utils for k7://. -->
-    <DebDepends>libc6 (&gt;= 2.39), libstdc++6, libgtk-4-1 (&gt;= 4.12.0), libwebkitgtk-6.0-4, libpulse0, libdbus-1-3, libgnutls30t64 | libgnutls30, libssl3t64 | libssl3, libkrb5-3, libxml2, xdg-utils, gstreamer1.0-plugins-good, gstreamer1.0-plugins-bad, gstreamer1.0-libav, gstreamer1.0-pulseaudio, gstreamer1.0-gl</DebDepends>
+    <DebDepends>libc6 (&gt;= 2.39), libstdc++6, libgtk-4-1 (&gt;= 4.12.0), libwebkitgtk-6.0-4, libpulse0, libdbus-1-3, libgnutls30t64 | libgnutls30, libssl3t64 | libssl3, libkrb5-3, xdg-utils, gstreamer1.0-plugins-good, gstreamer1.0-plugins-bad, gstreamer1.0-libav, gstreamer1.0-pulseaudio, gstreamer1.0-gl</DebDepends>
   </PropertyGroup>
 
   <Target Name="K7CopyLibVlcLinuxNatives"
