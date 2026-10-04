@@ -119,7 +119,46 @@ public class LiteMediaMappingsTests
 
         result!.AdditionalInformations.Should().Be("S01E02");
         result.SubtitleHref.Should().BeNull();
+        result.TitleHref.Should().BeNull();
         result.RelatedLinks.Should().Contain(link => link.Kind == MediaCardRelatedKind.Series);
+    }
+
+    [Test]
+    public void ToCardViewModel_ShouldLinkSerie_WhenSeasonTitleIsSerieTitle()
+    {
+        var serieId = Guid.NewGuid();
+        var item = new LiteSerieSeasonDto
+        {
+            Id = Guid.NewGuid(),
+            Title = "Breaking Bad",
+            SeasonNumber = 2,
+            SerieId = serieId,
+            SerieTitle = "Breaking Bad"
+        };
+        var apiClient = Substitute.For<IK7ServerService>();
+
+        var result = item.ToCardViewModel(apiClient, n => $"Season {n}");
+
+        result!.Title.Should().Be("Breaking Bad");
+        result.TitleHref.Should().Be($"/series/{serieId}");
+    }
+
+    [Test]
+    public void ToCardViewModel_ShouldKeepSeasonTitleAsText_WhenItIsNotSerieTitle()
+    {
+        var item = new LiteSerieSeasonDto
+        {
+            Id = Guid.NewGuid(),
+            Title = "Season 2",
+            SeasonNumber = 2,
+            SerieId = Guid.NewGuid(),
+            SerieTitle = "Breaking Bad"
+        };
+        var apiClient = Substitute.For<IK7ServerService>();
+
+        var result = item.ToCardViewModel(apiClient, n => $"Season {n}");
+
+        result!.TitleHref.Should().BeNull();
     }
 
     [Test]
@@ -239,6 +278,7 @@ public class LiteMediaMappingsTests
         var result = item.ToCardViewModel(apiClient);
 
         result.AdditionalInformations.Should().BeNull();
+        result.TitleHref.Should().Be($"/series/{serieId}");
         result.SeasonNumber.Should().Be(2);
         result.RelatedLinks.Select(link => link.Href).Should().Equal(
             $"/series/{serieId}",
@@ -265,6 +305,7 @@ public class LiteMediaMappingsTests
 
         result.AdditionalInformations.Should().Be("S01E02");
         result.SubtitleHref.Should().BeNull();
+        result.TitleHref.Should().Be($"/series/{serieId}");
         result.RelatedLinks.Select(link => link.Kind).Should().Equal(
             MediaCardRelatedKind.Series,
             MediaCardRelatedKind.Season);

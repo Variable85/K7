@@ -66,6 +66,54 @@ public class MediaCardTests
     }
 
     [Test]
+    public void Render_ShouldLinkTitle_WhenTitleHrefDiffersFromCard()
+    {
+        using var ctx = CreateContext();
+        var model = new MediaCardViewModel
+        {
+            Id = Guid.NewGuid().ToString(),
+            Kind = MediaCardKind.Episode,
+            MediaType = MediaType.SerieEpisode,
+            Title = "Breaking Bad",
+            AdditionalInformations = "S04E01",
+            TitleHref = "/series/1"
+        };
+
+        var cut = ctx.Render<MediaCard>(p => p
+            .Add(c => c.Model, model)
+            .Add(c => c.Href, "/series/1/seasons/4#ep-1")
+            .Add(c => c.FooterVisible, true));
+
+        var link = cut.Find("a.media-card-title-link");
+        link.TextContent.Should().Be("Breaking Bad");
+        link.GetAttribute("href").Should().Be("/series/1");
+        link.GetAttribute("tabindex").Should().Be("-1");
+        cut.FindAll("a.media-card-subtitle-link").Should().BeEmpty();
+    }
+
+    [Test]
+    public void Render_ShouldKeepTitleAsText_WhenTitleHrefMatchesCard()
+    {
+        using var ctx = CreateContext();
+        var model = new MediaCardViewModel
+        {
+            Id = Guid.NewGuid().ToString(),
+            Kind = MediaCardKind.Serie,
+            MediaType = MediaType.Serie,
+            Title = "Breaking Bad",
+            TitleHref = "/series/1"
+        };
+
+        var cut = ctx.Render<MediaCard>(p => p
+            .Add(c => c.Model, model)
+            .Add(c => c.Href, "/series/1")
+            .Add(c => c.FooterVisible, true));
+
+        cut.FindAll("a.media-card-title-link").Should().BeEmpty();
+        cut.Find(".media-card-title").TextContent.Should().Be("Breaking Bad");
+    }
+
+    [Test]
     public void Render_ShouldFormatSeasonLabel_WhenSubtitleIsEmpty()
     {
         using var ctx = CreateContext();

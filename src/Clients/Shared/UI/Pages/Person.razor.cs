@@ -264,6 +264,7 @@ public partial class Person : IAsyncDisposable
             Kind = MediaCardKind.Serie,
             MediaType = MediaType.Serie,
             Title = episode.SerieTitle ?? card.Title,
+            TitleHref = null,
             AdditionalInformations = episode.SerieReleaseDate?.Year.ToString(),
             PictureUrl = posterUrl,
             ParentId = null,

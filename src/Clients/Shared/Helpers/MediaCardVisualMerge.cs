@@ -23,6 +23,7 @@ public static class MediaCardVisualMerge
             && existing.Title == next.Title
             && existing.AdditionalInformations == next.AdditionalInformations
             && existing.SubtitleHref == next.SubtitleHref
+            && existing.TitleHref == next.TitleHref
             && MediaCardRelatedLinks.Same(existing.RelatedLinks, next.RelatedLinks)
             && existing.UserRating == next.UserRating)
         {

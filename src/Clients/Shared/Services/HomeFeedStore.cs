@@ -894,6 +894,7 @@ public sealed class HomeFeedStore : IHomeFeedStore, IDisposable
         || existing.Title != next.Title
         || existing.AdditionalInformations != next.AdditionalInformations
         || existing.SubtitleHref != next.SubtitleHref
+        || existing.TitleHref != next.TitleHref
         || !MediaCardRelatedLinks.Same(existing.RelatedLinks, next.RelatedLinks)
         || existing.Overview != next.Overview
         || existing.TagLine != next.TagLine

@@ -80,6 +80,7 @@ public static class LiteMediaMappings
             Title = cardTitle,
             AdditionalInformations = additionalInformations,
             SubtitleHref = ResolveLiteSubtitleHref(item, episodeDto, preferEpisodeStill, relatedLinks),
+            TitleHref = ResolveLiteTitleHref(episodeDto, seasonDto, cardTitle, useParentTitle, relatedLinks),
             RelatedLinks = relatedLinks,
             PictureUrl = apiClient.GetAbsoluteUri(bestPicture?.GetUri(pictureSize)?.OriginalString)?.AbsoluteUri,
             BackdropUrl = apiClient.GetAbsoluteUri(
@@ -139,6 +140,24 @@ public static class LiteMediaMappings
         return null;
     }
 
+    private static string? ResolveLiteTitleHref(
+        LiteSerieEpisodeDto? episode,
+        LiteSerieSeasonDto? season,
+        string? cardTitle,
+        bool useParentTitle,
+        IReadOnlyList<MediaCardRelatedLink> relatedLinks)
+    {
+        if (useParentTitle && !string.IsNullOrEmpty(episode?.SerieTitle))
+            return MediaCardRelatedLinks.SeriesHref(relatedLinks);
+
+        if (season is not null
+            && !string.IsNullOrEmpty(season.SerieTitle)
+            && string.Equals(cardTitle, season.SerieTitle, StringComparison.Ordinal))
+            return MediaCardRelatedLinks.SeriesHref(relatedLinks);
+
+        return null;
+    }
+
     public static MediaCardViewModel ToCardViewModel(
         this HomeFeedItemDto item,
         IK7ServerService apiClient,
@@ -180,6 +199,7 @@ public static class LiteMediaMappings
             SubtitleHref = string.IsNullOrEmpty(item.AdditionalInfo)
                 ? null
                 : MediaCardRelatedLinks.ArtistHref(relatedLinks),
+            TitleHref = ResolveHomeTitleHref(item, relatedLinks),
             RelatedLinks = relatedLinks,
             PictureUrl = ResolveCardPictureUrl(bestPicture, apiClient, pictureSize),
             BackdropUrl = ResolveHeroPictureUrl(backdropPicture, apiClient),
@@ -208,6 +228,20 @@ public static class LiteMediaMappings
             return null;
 
         return item.ReleaseDate?.Year.ToString();
+    }
+
+    private static string? ResolveHomeTitleHref(
+        HomeFeedItemDto item,
+        IReadOnlyList<MediaCardRelatedLink> relatedLinks)
+    {
+        if (item.MediaType is not (MediaType.SerieEpisode or MediaType.SerieSeason))
+            return null;
+
+        var href = MediaCardRelatedLinks.SeriesHref(relatedLinks);
+        if (string.IsNullOrEmpty(href) || MediaCardRelatedLinks.MatchesCard(href, item.NavigationTarget))
+            return null;
+
+        return href;
     }
 
     public static bool HasHeroDetails(this MediaCardViewModel item) =>

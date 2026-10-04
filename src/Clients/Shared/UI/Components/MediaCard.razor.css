@@ -295,12 +295,14 @@
     will-change: transform;
 }
 
-a.media-card-subtitle-link {
+a.media-card-subtitle-link,
+a.media-card-title-link {
     color: inherit;
     text-decoration: none;
 }
 
-a.media-card-subtitle-link:hover {
+a.media-card-subtitle-link:hover,
+a.media-card-title-link:hover {
     text-decoration: underline;
 }
 

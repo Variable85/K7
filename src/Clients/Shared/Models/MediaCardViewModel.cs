@@ -19,6 +19,7 @@ public record MediaCardViewModel
     public bool SoftHeroBackdrop { get; init; }
     public string? AdditionalInformations { get; init; }
     public string? SubtitleHref { get; init; }
+    public string? TitleHref { get; init; }
     public IReadOnlyList<MediaCardRelatedLink> RelatedLinks { get; init; } = [];
     public bool Watched { get; set; } = false;
     public double Progress { get; set; } = 0;
