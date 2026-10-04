@@ -184,6 +184,11 @@
                     }
                 </div>
             }
+
+            @if (JumpIndexLabels is { Count: > 0 } && _currentMode is not BrowseViewMode.Table)
+            {
+                <K7JumpIndex Labels="JumpIndexLabels" OnJumpRequested="OnJumpRequested" AriaLabel="@S["JumpIndex"]" />
+            }
         </div>
 
         @if (!UseProvider && HasMore && OnLoadMore is not null
@@ -192,11 +197,6 @@
             <div class="browse-view-sentinel" @ref="_sentinelRef">
                 <K7Spinner />
             </div>
-        }
-
-        @if (JumpIndexLabels is { Count: > 0 } && _currentMode is not BrowseViewMode.Table)
-        {
-            <K7JumpIndex Labels="JumpIndexLabels" OnJumpRequested="OnJumpRequested" AriaLabel="@S["JumpIndex"]" />
         }
 
         <K7BackToTop />

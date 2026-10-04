@@ -1,44 +1,48 @@
 .k7-jump-index {
     position: absolute;
     right: var(--space-2);
-    top: 50%;
-    transform: translateY(-50%);
+    top: 0;
+    bottom: 0;
+    margin-bottom: var(--space-3);
     display: flex;
     flex-direction: column;
     align-items: center;
     z-index: 10;
-    padding: var(--space-2) var(--space-1);
+    padding: var(--space-1);
+    background: color-mix(in srgb, var(--color-text) 8%, transparent);
+    border-radius: var(--radius-md);
+    overflow: hidden;
     user-select: none;
     touch-action: none;
+    box-sizing: border-box;
 }
 
 .k7-jump-index-item {
     display: flex;
     align-items: center;
     justify-content: center;
+    flex: 1 1 0;
     width: 20px;
-    height: 16px;
-    font-size: var(--text-2xs);
+    min-height: 0;
+    font-size: var(--text-xs);
+    line-height: 1;
     font-weight: 600;
     color: var(--color-text-muted);
     background: none;
-    border: none;
+    border: 1px solid transparent;
     padding: 0;
     cursor: pointer;
-    border-radius: var(--radius-xs);
-    transition: color 0.1s, background 0.1s;
+    border-radius: var(--radius-md);
+    transition: color 0.1s, background 0.1s, border-color 0.1s;
 }
 
 .k7-jump-index-item:hover,
-.k7-jump-index-item--active {
+.k7-jump-index-item--active,
+.k7-jump-index-item:focus-visible {
     color: var(--color-accent-text);
     background: color-mix(in srgb, var(--color-accent) 15%, transparent);
-}
-
-.k7-jump-index-item:focus-visible {
-    outline: 2px solid var(--color-accent);
-    outline-offset: 1px;
-    border-radius: var(--radius-xs);
+    border-color: color-mix(in srgb, var(--color-accent) 50%, transparent);
+    outline: none;
 }
 
 @media (min-width: 600px) {
@@ -50,10 +54,12 @@
 @media (max-width: 599.98px) {
     .k7-jump-index {
         right: var(--space-2);
+        margin-bottom: var(--space-2);
     }
 }
 
 .k7-jump-index--active .k7-jump-index-item--active {
     background: var(--color-accent);
     color: var(--color-on-accent);
+    border-color: var(--color-accent);
 }
